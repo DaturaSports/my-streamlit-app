@@ -1,7 +1,17 @@
 import streamlit as st
 
-st.set_page_config(page_title="My Betting Tool", layout="centered")
+# Minimal UI
+st.title("Betting Tool")
+st.write("EV Calculator")
 
-st.title("✅ App Is Live")
-st.write("This Streamlit app is running on Vercel.")
-st.write("Next: Add your betting model here.")
+prob = st.number_input("Win Probability", 0.0, 1.0, 0.6)
+odds = st.number_input("Decimal Odds", 1.01, 100.0, 2.0)
+
+ev = prob - (1 / odds)
+st.write(f"EV: {ev:.3f}")
+
+if ev > 0:
+    stake = 0.5 * ev / (1 - prob)
+    st.write(f"Stake: {stake:.1%}")
+else:
+    st.write("No bet")
