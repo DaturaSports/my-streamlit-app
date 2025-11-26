@@ -132,11 +132,18 @@ st.session_state.odds = st.number_input("Odds for Upcoming Event", min_value=1.0
 # === RECOMMENDED STAKE ===
 st.subheader("Recommended Stake")
 
+# 🟢 MOVE THESE CALCULATIONS OUTSIDE the function so they are available for display
+remaining_target = st.session_state.target_profit - (st.session_state.current_bankroll - st.session_state.starting_bankroll)
+events_remaining = st.session_state.total_events - st.session_state.events_completed
+
 # Core Risk Model Logic
 def calculate_stake():
-    remaining_target = st.session_state.target_profit - (st.session_state.current_bankroll - st.session_state.starting_bankroll)
-    events_remaining = st.session_state.total_events - st.session_state.events_completed
-    if events_remaining <= 0:
+    # We can reuse the variables defined above if needed, or recalculate for clarity
+    # Using the same logic here ensures consistency
+    local_remaining_target = st.session_state.target_profit - (st.session_state.current_bankroll - st.session_state.starting_bankroll)
+    local_events_remaining = st.session_state.total_events - st.session_state.events_completed
+    
+    if local_events_remaining <= 0:
         return 0.0
 
     # Base risk per mode (aligned with internal framework)
@@ -170,10 +177,15 @@ st.session_state.recommended_stake = calculate_stake()
 colA, colB = st.columns([2, 1])
 with colA:
     st.markdown(f"<h2 style='color:#00cc00;'>${st.session_state.recommended_stake:,.2f}</h2>", unsafe_allow_html=True)
-    st.markdown(f"Need ${remaining_target / events_remaining:,.2f} profit/event over {events_remaining} events")
+    # ✅ Now safe to use because defined above
+    if events_remaining > 0:
+        st.markdown(f"Need ${remaining_target / events_remaining:,.2f} profit/event over {events_remaining} events")
+    else:
+        st.markdown("Target achieved or no events remaining.")
 with colB:
     st.metric("Win Rate", f"{win_rate:.1%}")
     st.metric("Avg Odds", f"{avg_odds:.2f}")
+
 
 # === RECORD OUTCOME ===
 st.subheader("Record Outcome")
