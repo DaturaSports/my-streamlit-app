@@ -5,6 +5,7 @@ import streamlit as st
 import math
 
 # === CUSTOM STYLES ===
+# === CUSTOM STYLES ===
 st.markdown("""
 <style>
     .stApp {
@@ -22,17 +23,27 @@ st.markdown("""
         font-weight: 600;
     }
     .stButton button[kind="primary"] {
-        background-color: #00cc00;
+        background-color: #00cc00; /* Green */
         color: white;
     }
+    /* Adjusted for readability on dark theme */
     .stMetric {
-        background-color: #f0f2f6;
+        background-color: #f0f2f6; /* Light gray background for the metric boxes */
         padding: 10px;
         border-radius: 8px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        color: #1a1a1a; /* Dark gray text color for metrics */
+    }
+    /* Ensure metric labels and values are also dark */
+    .stMetric > div > div:first-child { /* Metric label */
+        color: #4a4a4a; /* Slightly lighter dark gray for label */
+    }
+    .stMetric > div > div:last-child { /* Metric value */
+        color: #1a1a1a; /* Dark gray for value */
     }
 </style>
 """, unsafe_allow_html=True)
+
 
 # === APP TITLE ===
 st.title("🎯 One Big Model")
