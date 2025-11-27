@@ -1,5 +1,5 @@
 # app.py
-# 🎯 One Big Model - Debugged & Enhanced
+# 🎯 One Big Model - Final Debugged & Themed Version
 
 import streamlit as st
 from datetime import datetime
@@ -21,7 +21,7 @@ if "pattern_source" not in st.session_state:
     st.session_state.pattern_source = "Use Proven League Strategy"
 if "selected_league" not in st.session_state:
     st.session_state.selected_league = "NRL Favourite"
-if "custom_win_rate" not in st.session_state:  # New state for custom pattern
+if "custom_win_rate" not in st.session_state:
     st.session_state.custom_win_rate = 0.50
 if "odds" not in st.session_state:
     st.session_state.odds = 1.48
@@ -32,37 +32,97 @@ if "last_outcome" not in st.session_state:
 if "theme" not in st.session_state:
     st.session_state.theme = "Dark"  # Default theme
 
-# === CUSTOM STYLES & THEME TOGGLE ===
-# This injects CSS and a button to toggle between light and dark modes.
-# The theme is stored in session_state and persists across reruns.
+# === THEME TOGGLE & CUSTOM STYLES ===
+# Sidebar toggle for theme
 theme_toggle = st.sidebar.checkbox("☀️/🌙 Toggle Light/Dark Theme", value=(st.session_state.theme == "Light"))
 if theme_toggle:
     st.session_state.theme = "Light" if st.session_state.theme == "Dark" else "Dark"
 
+# Define theme colors
 if st.session_state.theme == "Dark":
     primary_color = "#00cc00"
     bg_color = "#121212"
     card_bg = "#1e1e1e"
     text_color = "#e0e0e0"
     input_bg = "#2d2d2d"
+    metric_bg = "#2a2a2a"
+    metric_text_color = "#ffffff"
 else:
     primary_color = "#009900"
-    bg_color = "#f0f0f0"
+    bg_color = "#f8f9fa"
     card_bg = "#ffffff"
     text_color = "#111111"
     input_bg = "#ffffff"
+    metric_bg = "#f1f3f5"
+    metric_text_color = "#111111"  # Ensures dark text in light mode
 
 st.markdown(f"""
 <style>
-    .stApp {{ background-color: {bg_color}; color: {text_color}; }}
-    .stRadio > div {{ background-color: {card_bg}; padding: 8px; border-radius: 8px; }}
-    .stButton button[kind="primary"] {{ background-color: {primary_color}; color: white; }}
-    .stMetric {{ background-color: {card_bg}; padding: 12px; border-radius: 8px; }}
-    .stExpander {{ border: 1px solid #444; border-radius: 8px; }}
-    .stTextInput > div > div > input, .stNumberInput > div > div > input {{ 
-        color: {text_color}; background-color: {input_bg}; 
+    /* Global Styles */
+    .stApp {{ 
+        background-color: {bg_color}; 
+        color: {text_color}; 
     }}
-    .stMarkdown h2 {{ color: {primary_color}; }}
+    
+    /* Radio buttons and general inputs */
+    .stRadio > div {{ 
+        background-color: {card_bg}; 
+        padding: 8px; 
+        border-radius: 8px; 
+    }}
+    .stTextInput > div > div > input, 
+    .stNumberInput > div > div > input, 
+    .stSelectbox > div > div > div {{ 
+        color: {text_color} !important; 
+        background-color: {input_bg} !important; 
+    }}
+    
+    /* Primary button */
+    .stButton button[kind="primary"] {{ 
+        background-color: {primary_color}; 
+        color: white; 
+        border: none; 
+    }}
+    
+    /* Metric Cards - This is the critical fix for light mode */
+    .stMetric {{
+        background-color: {metric_bg};
+        padding: 16px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border: 1px solid {card_bg};
+        color: {metric_text_color} !important;
+    }}
+    .stMetric .st-emotion-cache-1wmy9hl {{ /* Metric label */
+        color: {metric_text_color} !important;
+    }}
+    .stMetric .st-emotion-cache-g3pm9b {{ /* Metric value */
+        color: {primary_color} !important;
+        font-weight: 600;
+    }}
+    .stMetric .st-emotion-cache-1a0t4q8 {{ /* Delta */
+        color: {metric_text_color} !important;
+    }}
+
+    /* Expanders */
+    .stExpander {{ 
+        border: 1px solid #444; 
+        border-radius: 8px; 
+        background-color: {card_bg}; 
+    }}
+    .stExpander > div > div > div > p {{ 
+        color: {text_color}; 
+    }}
+    
+    /* Headings */
+    .stMarkdown h2, .stMarkdown h3 {{ 
+        color: {primary_color}; 
+    }}
+
+    /* Ensure all text is readable */
+    .stMarkdown, .stRadio, .stSelectbox {{
+        color: {text_color} !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,7 +157,7 @@ st.session_state.pattern_source = st.radio(
     index=0 if st.session_state.pattern_source == "Use Proven League Strategy" else 1
 )
 
-# 🟢 Define win_rate and avg_odds at the top level so calculate_stake() can always access them
+# 🟢 Define win_rate and avg_odds BEFORE any function that uses them
 win_rate = 0.0
 avg_odds = 1.0
 
@@ -107,7 +167,6 @@ if st.session_state.pattern_source == "Use Proven League Strategy":
         ["NRL Favourite", "Soccer League A", "Basketball League X"],
         index=["NRL Favourite", "Soccer League A", "Basketball League X"].index(st.session_state.selected_league)
     )
-    # Set the values based on the selected league
     if st.session_state.selected_league == "NRL Favourite":
         win_rate = 0.666
         avg_odds = 1.48
@@ -129,58 +188,54 @@ else:  # Create Custom Pattern
         format="%.2f"
     )
     win_rate = st.session_state.custom_win_rate
-    avg_odds = st.session_state.odds  # Or let user input this
+    avg_odds = st.session_state.odds
     st.markdown(f"**Your Stats: Win Rate {win_rate:.1%} | Avg Odds {avg_odds:.2f}**")
-
-# === BANKROLL & NEXT EVENT ===
-st.subheader("Bankroll & Next Event")
-st.session_state.starting_bankroll = st.number_input("Starting Bankroll ($)", min_value=0.0, value=float(st.session_state.starting_bankroll), step=100.0)
-st.session_state.odds = st.number_input("Odds for Upcoming Event", min_value=1.01, value=float(st.session_state.odds), step=0.01)
 
 # === RECOMMENDED STAKE ===
 st.subheader("Recommended Stake")
 
-# Core Risk Model Logic - Now robust and always has access to 'win_rate'
-def calculate_stake():
+# Core Risk Model Logic - Now receives 'win_rate' as a parameter
+def calculate_stake(input_win_rate):
     remaining_target = st.session_state.target_profit - (st.session_state.current_bankroll - st.session_state.starting_bankroll)
     events_remaining = st.session_state.total_events - st.session_state.events_completed
     if events_remaining <= 0:
         return 0.0
 
-    # Base risk per mode (aligned with internal framework)
+    # Base risk per mode
     if st.session_state.betting_mode == "Steady Grind":
-        base_risk = 0.02  # 2% of bankroll
+        base_risk = 0.02
     elif st.session_state.betting_mode == "Comeback":
-        base_risk = 0.03  # 3%, with dynamic adjustment after loss
+        base_risk = 0.03
     else:  # Power Reset
-        base_risk = 0.04  # 4%, resets to base after win
+        base_risk = 0.04
 
-    # Conservative Kelly Fraction using the win_rate (from proven or custom)
+    # Kelly Criterion
     implied_prob = 1 / st.session_state.odds
-    edge = win_rate - implied_prob
+    edge = input_win_rate - implied_prob  # Use the passed parameter
     if edge <= 0:
         return 0.0
 
     kelly_fraction = edge / ((st.session_state.odds - 1) / 1)
-    fractional_kelly = kelly_fraction * 0.5  # 50% Kelly for risk control
+    fractional_kelly = kelly_fraction * 0.5
 
-    # Final stake is the minimum of: Kelly recommendation, mode-specific risk cap
     stake_from_kelly = fractional_kelly * st.session_state.current_bankroll
     stake_from_risk_cap = base_risk * st.session_state.current_bankroll
     final_stake = min(stake_from_kelly, stake_from_risk_cap)
 
-    return max(final_stake, 5.0)  # Minimum $5 stake
+    return max(final_stake, 5.0)
 
-# 🔄 Calculate stake EVERY TIME the app reruns (after input changes, win/loss, etc.)
-st.session_state.recommended_stake = calculate_stake()
+# 🔄 Calculate stake with the explicitly passed win_rate
+st.session_state.recommended_stake = calculate_stake(win_rate)
 
 # Display
 colA, colB = st.columns([2, 1])
 with colA:
-    st.markdown(f"<h2>${st.session_state.recommended_stake:,.2f}</h2>", unsafe_allow_html=True)
+    st.markdown(f"<h2 style='font-size: 28px; color: {primary_color};'>${st.session_state.recommended_stake:,.2f}</h2>", unsafe_allow_html=True)
+    remaining_target = st.session_state.target_profit - (st.session_state.current_bankroll - st.session_state.starting_bankroll)
+    events_remaining = st.session_state.total_events - st.session_state.events_completed
     if events_remaining > 0:
         profit_per_event = remaining_target / events_remaining
-        st.markdown(f"Need ${profit_per_event:,.2f} profit/event over {events_remaining} events")
+        st.markdown(f"Need **${profit_per_event:,.2f}** profit/event over **{events_remaining}** events")
     else:
         st.markdown("Target achieved or no events remaining.")
 with colB:
@@ -196,7 +251,6 @@ with colX:
         st.session_state.current_bankroll += st.session_state.recommended_stake
         st.session_state.events_completed += 1
         st.session_state.last_outcome = "win"
-        # 🔄 Rerun to recalculate stake with updated bankroll
         st.rerun()
 
 with colY:
@@ -204,14 +258,12 @@ with colY:
         st.session_state.current_bankroll -= st.session_state.recommended_stake
         st.session_state.events_completed += 1
         st.session_state.last_outcome = "loss"
-        # 🔄 Rerun to recalculate stake with updated bankroll
         st.rerun()
 
 with colZ:
     if st.button("🔄 Reset All"):
         for key in st.session_state.keys():
             del st.session_state[key]
-        # This will force a fresh start
         st.rerun()
 
 # === DISPLAY FINAL METRICS ===
