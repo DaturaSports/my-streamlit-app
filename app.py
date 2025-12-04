@@ -356,22 +356,22 @@ if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # Capture state BEFORE result
-    was_paused_due_to_wins = st.session_state.consecutive_wins >= 2
+    # Capture state BEFORE any updates
+    prior_consecutive_wins = st.session_state.consecutive_wins
+    prior_consecutive_losses = st.session_state.consecutive_losses
+    was_paused_due_to_wins = prior_consecutive_wins >= 2
+    was_waiting_due_to_losses = wait_after_two_losses and prior_consecutive_losses < 2
 
-    # Determine if bet should be placed (before result)
-    should_bet = st.session_state.betting_active
-
-    # Determine actual stake
+    # Determine if this race had a bet (based on state before result)
+    should_place_bet = st.session_state.betting_active
     if st.session_state.just_resumed:
         actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
         st.session_state.just_resumed = False
-    elif should_bet:
+    elif should_place_bet:
         actual_stake = recommended_stake
     else:
         actual_stake = 0.0
 
-    # Cap stake
     if actual_stake > st.session_state.bankroll:
         actual_stake = st.session_state.bankroll
 
@@ -384,39 +384,46 @@ if 'result_input' in st.session_state:
         if actual_stake > 0:
             payout = actual_stake * current_race['odds']
             profit_loss = payout - actual_stake
+            # Only update streaks if we placed a bet
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            st.session_state.consecutive_wins += 1
-            st.session_state.consecutive_losses = 0
+            # 🚫 No bet → no streak update
+            # Do NOT increment wins on $0 bets
+            pass
         st.session_state.bankroll += profit_loss
 
     else:  # Loss
         if actual_stake > 0:
             profit_loss = -actual_stake
+            # Only update streaks if we placed a bet
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            profit_loss = 0.0
-            st.session_state.consecutive_losses += 1
-            st.session_state.consecutive_wins = 0
+            # No bet → still update loss counter?
+            # Only if we were in a pause state
             if was_paused_due_to_wins:
+                # This loss breaks the pause → next race gets reset
                 st.session_state.just_resumed = True
+            # But don't increment win/loss streaks for $0 bets
         st.session_state.bankroll += profit_loss
 
-    # --- Recalculate betting_active after result ---
-    if st.session_state.consecutive_wins >= 2:
+    # --- 🔁 Recalculate betting_active after result ---
+    current_wins = st.session_state.consecutive_wins
+    current_losses = st.session_state.consecutive_losses
+
+    if current_wins >= 2:
         st.session_state.betting_active = False
-    elif wait_after_two_losses and st.session_state.consecutive_losses < 2:
+    elif wait_after_two_losses and current_losses < 2:
         st.session_state.betting_active = False
     else:
         st.session_state.betting_active = True
 
-    # Log race
+    # Log the race
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
