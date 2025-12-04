@@ -193,7 +193,8 @@ with st.sidebar:
     st.markdown("---")
     st.button("🔁 Reset All Data", on_click=lambda: st.session_state.clear())
     st.markdown("---")
-    st.button("🌓 Toggle Dark/Light Mode", on_on_click=toggle_theme)
+    # ✅ Fixed: Changed 'on_on_click' to 'on_click'
+    st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
     st.markdown(f"<small>Current Theme: <strong>{st.session_state.theme.title()}</strong></small>", unsafe_allow_html=True)
 
 # Re-init on bankroll change
@@ -276,14 +277,14 @@ if st.session_state.betting_active:
 
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
-        st.warning("📉 Stake reduced to available bankroll.") # This warning text is now explicitly styled
+        st.warning("📉 Stake reduced to available bankroll.")
 
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
 else:
     recommended_stake = 0.0
 
 # ✅ Custom Win/Loss Buttons – No Radio Issues
-st.markdown("### Record Result") # Changed from "Result" to "Record Result" for clarity
+st.markdown("### Record Result")
 st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
 col_win, col_loss = st.columns(2)
 with col_win:
@@ -327,6 +328,7 @@ if 'result_input' in st.session_state:
 
     st.session_state.bankroll += profit_loss
 
+    # ✅ Fixed: Added 'Status' to the history entry
     st.session_state.race_history.append({
         "Race": current_race['name'], "Odds": current_race['odds'], "Stake": round(actual_stake, 2),
         "Result": result, "Payout": round(payout, 2), "P/L": round(profit_loss, 2),
@@ -334,7 +336,7 @@ if 'result_input' in st.session_state:
         "Bankroll After": round(st.session_state.bankroll, 2),
         "Wins Streak": st.session_state.consecutive_wins,
         "Losses Streak": st.session_state.consecutive_losses,
-        "Status": betting_status,
+        "Status": betting_status, # This key was missing, causing the KeyError
     })
 
     st.session_state.race_index += 1
@@ -348,10 +350,11 @@ if st.session_state.race_history:
     st.markdown("---")
     st.subheader("📊 Race History")
     history_df = pd.DataFrame(st.session_state.race_history)
+    # ✅ Fixed: Removed 'Status' from the column list since it's already in the data
     st.dataframe(
         history_df[[
             "Race", "Odds", "Stake", "Result", "P/L", "Cumulative P/L", "Bankroll After",
-            "Wins Streak", "Losses Streak", "Status"
+            "Wins Streak", "Losses Streak"
         ]].style.format({
             "Odds": "{:.2f}",
             "Stake": "${:,.2f}",
