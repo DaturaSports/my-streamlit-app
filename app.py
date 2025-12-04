@@ -9,33 +9,39 @@ if 'theme' not in st.session_state:
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Apply theme via CSS (custom styling for dark mode)
+# Apply theme via CSS (custom styling for dark mode and robust light mode)
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
         .stApp { background-color: #0E1117; color: #FAFAFA; }
-        .stRadio > label, .stNumberInput > label, .stMarkdown, .stCaption { color: #FAFAFA !important; }
-        .st-bb { background-color: #0E1117 !important; }
-        .st-at { background-color: #1F1F1F !important; border: 1px solid #333 !important; }
-        .st-bc { color: #FAFAFA !important; }
-        .st-emotion-cache-10trblm { color: #FAFAFA !important; }
-        .st-emotion-cache-16idsys p { color: #FAFAFA !important; }
-        .st-emotion-cache-1kyxreq { border: 1px solid #333 !important; }
-        .st-emotion-cache-12w0qpk { background-color: #1F1F1F !important; border: 1px solid #333 !important; }
-        .st-emotion-cache-1v3fvav { color: #FAFAFA !important; }
+        h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stCaption, label, .st-emotion-cache-10trblm { color: #FAFAFA !important; }
+        .stRadio > label, .stNumberInput > label { color: #FAFAFA !important; }
+        .st-bb { background-color: #0E1117 !important; } /* Main background */
+        .st-at { background-color: #1F1F1F !important; border: 1px solid #333 !important; } /* Input/Select background */
+        .st-bc { color: #FAFAFA !important; } /* Text within widgets */
+        .st-emotion-cache-16idsys p { color: #FAFAFA !important; } /* Paragraph text */
+        .st-emotion-cache-1kyxreq { border: 1px solid #333 !important; } /* Border for some elements */
+        .st-emotion-cache-12w0qpk { background-color: #1F1F1F !important; border: 1px solid #333 !important; } /* Button background */
+        .st-emotion-cache-1v3fvav { color: #FAFAFA !important; } /* Metric values */
+        .st-emotion-cache-1g6x8q { color: #FAFAFA !important; } /* Metric labels */
+        .st-emotion-cache-13k62yr { color: #FAFAFA !important; } /* Table text */
+        .st-emotion-cache-f1g0i0 { background-color: #1F1F1F !important; } /* Table header/background */
     </style>
     """, unsafe_allow_html=True)
-else:
+else: # Light mode
     st.markdown("""
     <style>
         .stApp { background-color: #FFFFFF; color: #000000; }
-        .stRadio > label, .stNumberInput > label, .stMarkdown, .stCaption { color: #000000 !important; }
-        .st-at { background-color: white !important; border: 1px solid #CCCCCC !important; }
-        .st-bc { color: #000000 !important; }
-        .st-emotion-cache-10trblm { color: #000000 !important; }
-        .st-emotion-cache-16idsys p { color: #000000 !important; }
-        .st-emotion-cache-12w0qpk { background-color: white !important; border: 1px solid #CCCCCC !important; }
-        .st-emotion-cache-1v3fvav { color: #000000 !important; }
+        h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stCaption, label, .st-emotion-cache-10trblm { color: #000000 !important; }
+        .stRadio > label, .stNumberInput > label { color: #000000 !important; }
+        .st-at { background-color: white !important; border: 1px solid #CCCCCC !important; } /* Input/Select background */
+        .st-bc { color: #000000 !important; } /* Text within widgets */
+        .st-emotion-cache-16idsys p { color: #000000 !important; } /* Paragraph text */
+        .st-emotion-cache-12w0qpk { background-color: white !important; border: 1px solid #CCCCCC !important; } /* Button background */
+        .st-emotion-cache-1v3fvav { color: #000000 !important; } /* Metric values */
+        .st-emotion-cache-1g6x8q { color: #000000 !important; } /* Metric labels */
+        .st-emotion-cache-13k62yr { color: #000000 !important; } /* Table text */
+        .st-emotion-cache-f1g0i0 { background-color: #F0F2F6 !important; } /* Table header/background */
     </style>
     """, unsafe_allow_html=True)
 
