@@ -4,7 +4,7 @@ import pandas as pd
 # Page configuration
 st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
-st.markdown("Track your strategy with dynamic staking, race cycling, and bankroll management.")
+st.markdown("Track your strategy with automated no-bet rules and dynamic staking.")
 
 # Initialize session state at the very top
 if 'bankroll' not in st.session_state:
@@ -14,11 +14,10 @@ if 'bankroll' not in st.session_state:
     st.session_state.last_odds = 0.0
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
-    st.session_state.betting_active = True
     st.session_state.race_index = 0
     st.session_state.race_history = []
 
-    # Define the race list only once at initialization
+    # Pre-loaded races
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
         {"name": "Warragul • Race 9 - 1. Sweet Coin Babe (1)", "odds": 1.75},
@@ -55,7 +54,7 @@ with st.sidebar:
             del st.session_state[key]
         st.rerun()
 
-# Re-initialize bankroll if reset or changed in sidebar
+# Re-initialize bankroll if changed in sidebar
 if st.session_state.initial_bankroll != initial_bankroll:
     st.session_state.initial_bankroll = initial_bankroll
     st.session_state.bankroll = initial_bankroll
@@ -63,24 +62,26 @@ if st.session_state.initial_bankroll != initial_bankroll:
     st.session_state.last_odds = 0.0
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
-    st.session_state.betting_active = True
     st.session_state.race_index = 0
     st.session_state.race_history = []
 
-# Update betting_active based on rules
-current_losses = st.session_state.consecutive_losses
+# Determine betting eligibility
 current_wins = st.session_state.consecutive_wins
+current_losses = st.session_state.consecutive_losses
 
-if wait_after_two_losses:
-    st.session_state.betting_active = (current_losses >= 2)
-else:
-    st.session_state.betting_active = True
-
-# After 2 wins in a row → pause betting until next loss
+# Rule 1: After 2 wins → no betting until a loss occurs
 if current_wins >= 2:
     st.session_state.betting_active = False
+    betting_status = "⏸️ No bet – wait for a loss"
+# Rule 2: Optional wait until 2 losses
+elif wait_after_two_losses and current_losses < 2:
+    st.session_state.betting_active = False
+    betting_status = "⏸️ No bet – waiting for 2 losses"
+else:
+    st.session_state.betting_active = True
+    betting_status = "🟢 Betting active"
 
-# Display current status
+# Display status
 col1, col2, col3 = st.columns(3)
 col1.metric("Bankroll", f"${st.session_state.bankroll:,.2f}")
 col2.metric("P&L", f"${st.session_state.bankroll - st.session_state.initial_bankroll:,.2f}")
@@ -100,14 +101,16 @@ st.markdown("---")
 st.subheader(f"Race {current_idx + 1} of {total_races}")
 st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
 
-# Calculate recommended stake
-if not st.session_state.betting_active:
-    recommended_stake = 0.0
-    st.info("⏸️ Betting paused: Waiting for condition (2 wins or <2 losses).")
-else:
+# Show betting status
+st.info(betting_status)
+
+# Calculate recommended stake only if betting is active
+if st.session_state.betting_active:
     if current_losses == 0:
+        # First bet or reset after win cycle
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
+        # Apply multiplier based on last loss's odds
         last_odds = st.session_state.last_odds
         if last_odds > 2.00:
             multiplier = 2
@@ -119,68 +122,76 @@ else:
             multiplier = 1
         recommended_stake = st.session_state.last_bet_amount * multiplier
 
-    # Cap to available bankroll
+    # Cap to bankroll
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
         st.warning("📉 Stake reduced to available bankroll.")
 
-st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
+    st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
+else:
+    recommended_stake = 0.0
 
 # Win/Loss input
-result = st.radio("Outcome", ["Win", "Loss", "No Bet (Skip)"], horizontal=True, key=f"result_{current_idx}")
+st.markdown("### Result")
+result = st.radio(
+    "Select outcome",
+    ["Win", "Loss"],
+    key=f"result_{current_idx}",
+    disabled=not st.session_state.betting_active,
+    help="Betting paused – result will be recorded but no stake applied" if not st.session_state.betting_active else None
+)
 
-# Action buttons
-col_nav, col_act = st.columns([3, 1])
-with col_nav:
-    if current_idx > 0:
-        if st.button("⬅️ Previous Race"):
-            st.session_state.race_index -= 1
-            st.rerun()
-with col_act:
-    if st.button("✅ Record Result"):
-        # Process result
-        if result == "No Bet (Skip)":
-            actual_stake = 0.0
-            payout = 0.0
-            profit_loss = 0.0
-        else:
-            actual_stake = recommended_stake if recommended_stake > 0 else 0.0
-            if result == "Win":
-                payout = actual_stake * current_race['odds']
-                profit_loss = payout - actual_stake
-                st.session_state.consecutive_wins += 1
-                st.session_state.consecutive_losses = 0
-            else:  # Loss
-                payout = 0.0
-                profit_loss = -actual_stake
-                st.session_state.consecutive_losses += 1
-                st.session_state.consecutive_wins = 0
+# Action button
+if st.button("✅ Record Result"):
+    # Initialize values
+    actual_stake = recommended_stake if st.session_state.betting_active and result in ["Win", "Loss"] else 0.0
 
-        # Update bankroll
-        st.session_state.bankroll += profit_loss
-
-        # Record in history
-        st.session_state.race_history.append({
-            "Race": current_race['name'],
-            "Odds": current_race['odds'],
-            "Stake": actual_stake,
-            "Result": result,
-            "Payout": round(payout, 2),
-            "P/L": round(profit_loss, 2),
-            "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
-            "Bankroll After": round(st.session_state.bankroll, 2),
-            "Wins Streak": st.session_state.consecutive_wins,
-            "Losses Streak": st.session_state.consecutive_losses,
-        })
-
-        # Update last bet and odds if a bet was placed
-        if result in ["Win", "Loss"]:
+    # Process result
+    if result == "Win":
+        payout = actual_stake * current_race['odds']
+        profit_loss = payout - actual_stake
+        st.session_state.consecutive_wins += 1
+        st.session_state.consecutive_losses = 0
+        if st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
+    elif result == "Loss":
+        payout = 0.0
+        profit_loss = -actual_stake
+        st.session_state.consecutive_losses += 1
+        st.session_state.consecutive_wins = 0
+        # Only update last bet/odds if it was a real bet (i.e. betting was active)
+        if st.session_state.betting_active:
+            st.session_state.last_bet_amount = actual_stake
+            st.session_state.last_odds = current_race['odds']
+        # If this loss breaks a 2-win pause, reset wins so betting resumes
+        if current_wins >= 2:
+            st.session_state.consecutive_wins = 0
+    else:
+        payout = 0.0
+        profit_loss = 0.0
 
-        # Move to next race
-        st.session_state.race_index += 1
-        st.rerun()
+    # Update bankroll
+    st.session_state.bankroll += profit_loss
+
+    # Record in history
+    st.session_state.race_history.append({
+        "Race": current_race['name'],
+        "Odds": current_race['odds'],
+        "Stake": round(actual_stake, 2),
+        "Result": result,
+        "Payout": round(payout, 2),
+        "P/L": round(profit_loss, 2),
+        "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
+        "Bankroll After": round(st.session_state.bankroll, 2),
+        "Wins Streak": st.session_state.consecutive_wins,
+        "Losses Streak": st.session_state.consecutive_losses,
+        "Status": betting_status,
+    })
+
+    # Move to next race
+    st.session_state.race_index += 1
+    st.rerun()
 
 # Progress indicator
 st.markdown(f"<center>Progress: {current_idx + 1} / {total_races}</center>", unsafe_allow_html=True)
@@ -193,7 +204,7 @@ if st.session_state.race_history:
     st.dataframe(
         history_df[[
             "Race", "Odds", "Stake", "Result", "P/L", "Cumulative P/L", "Bankroll After",
-            "Wins Streak", "Losses Streak"
+            "Wins Streak", "Losses Streak", "Status"
         ]].style.format({
             "Odds": "{:.2f}",
             "Stake": "${:,.2f}",
@@ -206,4 +217,4 @@ if st.session_state.race_history:
 
 # Footer
 st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Logic: 60% expected win rate, progressive loss recovery, 2-win pause.")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Logic: 60% expected win rate, 2-win pause, progressive loss recovery.")
