@@ -46,7 +46,7 @@ if st.session_state.theme == 'dark':
         }
         .result-button-container button {
             background-color: #262730;
-            color: #FFFFFF !important; /* Ensure white text for buttons in dark mode */
+            color: #FFFFFF !important;
             border: 1px solid #444;
             padding: 10px 20px;
             border-radius: 4px;
@@ -63,10 +63,10 @@ if st.session_state.theme == 'dark':
         }
         .stWarning {
             background-color: #3C2A1F !important;
-            color: #FFD700 !important; /* Yellow background color for warnings in dark mode */
+            color: #FFD700 !important;
         }
-        .stWarning > div > p { /* Target text inside st.warning */
-            color: #FFD700 !important; /* Ensure yellow text for warnings in dark mode */
+        .stWarning > div > p {
+            color: #FFD700 !important;
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #FFFFFF !important;
@@ -112,7 +112,7 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
         }
         .result-button-container button {
             background-color: #F0F0F0;
-            color: #000000 !important; /* Ensure black text for buttons in light mode */
+            color: #000000 !important;
             border: 1px solid #CCCCCC;
             padding: 10px 20px;
             border-radius: 4px;
@@ -131,11 +131,11 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
         }
         .stWarning {
             background-color: #FFF3E0 !important;
-            color: #000000 !important; /* Ensure black text for warnings in light mode */
+            color: #000000 !important;
             border: 1px solid #FFB74D;
         }
-        .stWarning > div > p { /* Target text inside st.warning */
-            color: #000000 !important; /* Ensure black text for warnings in light mode */
+        .stWarning > div > p {
+            color: #000000 !important;
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #000000 !important;
@@ -159,6 +159,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_index = 0
     st.session_state.race_history = []
     st.session_state.just_resumed = False
+    st.session_state.edge_history = []  # Initialize edge history
 
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
@@ -207,7 +208,8 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'consecutive_losses': 0,
         'race_index': 0,
         'race_history': [],
-        'just_resumed': False
+        'just_resumed': False,
+        'edge_history': []
     })
 
 # Betting status
@@ -276,7 +278,7 @@ if st.session_state.betting_active:
 
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
-        st.warning("📉 Stake reduced to available bankroll.") # This warning text is now explicitly styled
+        st.warning("📉 Stake reduced to available bankroll.")
 
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
 else:
@@ -351,7 +353,7 @@ if st.session_state.race_history:
     st.dataframe(
         history_df[[
             "Race", "Odds", "Stake", "Result", "P/L", "Cumulative P/L", "Bankroll After",
-            "Wins Streak", "Losses Streak", "Status" # Re-added "Status" as it was correctly added to the dict
+            "Wins Streak", "Losses Streak", "Status"
         ]].style.format({
             "Odds": "{:.2f}",
             "Stake": "${:,.2f}",
@@ -361,6 +363,78 @@ if st.session_state.race_history:
         }),
         use_container_width=True
     )
+
+# --- EDGE MONITOR SECTION (Passive Companion) ---
+st.markdown("---")
+st.subheader("📊 Live Edge Monitor")
+
+current_race_prev = race_list[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
+upcoming_race = race_list[st.session_state.race_index] if st.session_state.race_index < len(race_list) else None
+
+# Display last race edge
+if current_race_prev:
+    implied_prob_percent = (1 / current_race_prev['odds']) * 100
+    model_prob_percent = 60.0  # Your model assumption
+    edge_percent = model_prob_percent - implied_prob_percent
+    edge_color = "#4CAF50" if edge_percent > 0 else "#F44336"
+
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace; margin-bottom: 8px;">
+        <div><strong>Last:</strong> {current_race_prev['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {current_race_prev['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied_prob_percent:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {edge_color};">{'+' if edge_percent >= 0 else ''}{edge_percent:.1f}%</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Log edge history
+    st.session_state.edge_history.append({
+        'race_num': st.session_state.race_index,
+        'dog': current_race_prev['name'].split(' - ')[-1],
+        'odds': round(current_race_prev['odds'], 2),
+        'implied_prob': round(implied_prob_percent, 1),
+        'model_prob': model_prob_percent,
+        'edge': round(edge_percent, 1)
+    })
+
+# Preview next race edge
+if upcoming_race:
+    implied_prob_percent = (1 / upcoming_race['odds']) * 100
+    edge_percent = 60.0 - implied_prob_percent
+    edge_color = "#4CAF50" if edge_percent > 0 else "#F44336"
+
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; background-color: #2a2a2a; padding: 8px; border-radius: 6px; font-size: 0.9em; font-family: 'Courier New', monospace;">
+        <div><strong>Next:</strong> {upcoming_race['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {upcoming_race['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied_prob_percent:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {edge_color};">{'+' if edge_percent >= 0 else ''}{edge_percent:.1f}%</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.caption("🏁 All races processed.")
+
+# --- EDGE EXPLAINER ---
+st.markdown("---")
+with st.expander("ℹ️ What is 'Edge'?"):
+    st.markdown("""
+    **Edge** is your statistical advantage over the market.
+
+    - **Implied Probability**: What the odds suggest the dog's chance is.  
+      Formula: `1 / Decimal Odds × 100`  
+      Example: $1.90 → 1 / 1.90 = **52.6%**
+
+    - **Model Probability**: Your long-term estimate.  
+      Here: **60%** (based on historical favorite win rate)
+
+    - **Edge**: `Model – Implied`  
+      → 60% – 52.6% = **+7.4%**
+
+    ✅ **Positive Edge**: Market undervalues the dog — potential opportunity.  
+    ❌ **Negative Edge**: Market sees better chances than your model.
+
+    This helps you bet based on value, not just patterns or streaks.
+    """)
 
 # Footer
 st.markdown("---")
