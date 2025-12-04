@@ -1,55 +1,130 @@
 import streamlit as st
 import pandas as pd
 
-# Page configuration
+# Theme toggle state
 if 'theme' not in st.session_state:
-    st.session_state.theme = 'light'  # default
+    st.session_state.theme = 'light'
 
-# Toggle function
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Apply theme via CSS (custom styling for dark mode and robust light mode)
+# Apply theme via universal CSS (no fragile class names)
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
-        .stApp { background-color: #0E1117; color: #FAFAFA; }
-        h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stCaption, label, .st-emotion-cache-10trblm { color: #FAFAFA !important; }
-        .stRadio > label, .stNumberInput > label { color: #FAFAFA !important; }
-        .st-bb { background-color: #0E1117 !important; } /* Main background */
-        .st-at { background-color: #1F1F1F !important; border: 1px solid #333 !important; } /* Input/Select background */
-        .st-bc { color: #FAFAFA !important; } /* Text within widgets */
-        .st-emotion-cache-16idsys p { color: #FAFAFA !important; } /* Paragraph text */
-        .st-emotion-cache-1kyxreq { border: 1px solid #333 !important; } /* Border for some elements */
-        .st-emotion-cache-12w0qpk { background-color: #1F1F1F !important; border: 1px solid #333 !important; } /* Button background */
-        .st-emotion-cache-1v3fvav { color: #FAFAFA !important; } /* Metric values */
-        .st-emotion-cache-1g6x8q { color: #FAFAFA !important; } /* Metric labels */
-        .st-emotion-cache-13k62yr { color: #FAFAFA !important; } /* Table text */
-        .st-emotion-cache-f1g0i0 { background-color: #1F1F1F !important; } /* Table header/background */
+        html, body, [data-testid="stAppViewContainer"], .stApp {
+            background-color: #0E1117;
+            color: #FFFFFF;
+        }
+        [data-testid="stHeader"], [data-testid="stSidebar"] {
+            background-color: #0E1117;
+        }
+        .stRadio label, .stNumberInput label, .stMarkdown, .stText, .stCaption, label {
+            color: #FFFFFF !important;
+            font-weight: 500;
+        }
+        .st-emotion-cache-1v3fvav, /* Metric value */
+        .st-emotion-cache-1g6x8q  /* Metric label */ {
+            color: #FFFFFF !important;
+        }
+        .stTextInput input, .stNumberInput input {
+            color: #FFFFFF !important;
+            background-color: #1E1E1E !important;
+            border: 1px solid #444 !important;
+        }
+        .stButton button {
+            background-color: #262730;
+            color: #FFFFFF;
+            border: 1px solid #444;
+        }
+        .stButton button:hover {
+            background-color: #333333;
+            color: #FFFFFF;
+        }
+        .stDataFrame, .stTable {
+            color: #FFFFFF;
+        }
+        .stDataFrame th, .stDataFrame td,
+        .stTable th, .stTable td {
+            color: #FFFFFF !important;
+            background-color: #1E1E1E !important;
+        }
+        .stDataFrame th {
+            background-color: #2D2D2D !important;
+        }
+        .stInfo {
+            background-color: #1A1D21 !important;
+            color: #FFFFFF;
+        }
+        .stWarning {
+            background-color: #3C2A1F !important;
+            color: #FFD700;
+        }
     </style>
     """, unsafe_allow_html=True)
-else: # Light mode
+else:  # Light Mode – High Contrast Fix
     st.markdown("""
     <style>
-        .stApp { background-color: #FFFFFF; color: #000000; }
-        h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, .stCaption, label, .st-emotion-cache-10trblm { color: #000000 !important; }
-        .stRadio > label, .stNumberInput > label { color: #000000 !important; }
-        .st-at { background-color: white !important; border: 1px solid #CCCCCC !important; } /* Input/Select background */
-        .st-bc { color: #000000 !important; } /* Text within widgets */
-        .st-emotion-cache-16idsys p { color: #000000 !important; } /* Paragraph text */
-        .st-emotion-cache-12w0qpk { background-color: white !important; border: 1px solid #CCCCCC !important; } /* Button background */
-        .st-emotion-cache-1v3fvav { color: #000000 !important; } /* Metric values */
-        .st-emotion-cache-1g6x8q { color: #000000 !important; } /* Metric labels */
-        .st-emotion-cache-13k62yr { color: #000000 !important; } /* Table text */
-        .st-emotion-cache-f1g0i0 { background-color: #F0F2F6 !important; } /* Table header/background */
+        html, body, [data-testid="stAppViewContainer"], .stApp {
+            background-color: #FFFFFF;
+            color: #000000;
+        }
+        [data-testid="stHeader"], [data-testid="stSidebar"] {
+            background-color: #FFFFFF;
+        }
+        .stRadio label, .stNumberInput label, .stMarkdown, .stText, .stCaption, label {
+            color: #000000 !important;
+            font-weight: 500;
+        }
+        .st-emotion-cache-1v3fvav, /* Metric value */
+        .st-emotion-cache-1g6x8q  /* Metric label */ {
+            color: #000000 !important;
+        }
+        .stTextInput input, .stNumberInput input {
+            color: #000000 !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #AAAAAA !important;
+        }
+        .stButton button {
+            background-color: #F0F0F0;
+            color: #000000;
+            border: 1px solid #CCCCCC;
+        }
+        .stButton button:hover {
+            background-color: #DDDDDD;
+            color: #000000;
+        }
+        .stDataFrame, .stTable {
+            color: #000000;
+        }
+        .stDataFrame th, .stDataFrame td,
+        .stTable th, .stTable td {
+            color: #000000 !important;
+            background-color: #FFFFFF !important;
+        }
+        .stDataFrame th {
+            background-color: #F0F2F6 !important;
+            color: #000000 !important;
+        }
+        .stInfo {
+            background-color: #E6F3FF !important;
+            color: #000000;
+            border: 1px solid #B3D9FF;
+        }
+        .stWarning {
+            background-color: #FFF3E0 !important;
+            color: #CC5500;
+            border: 1px solid #FFB74D;
+        }
     </style>
     """, unsafe_allow_html=True)
 
+# Page config
 st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
 st.markdown("Track your strategy with auto-pause, reset stakes, and theme control.")
 
-# Initialize session state at the very top
+# Initialize session state
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
@@ -59,9 +134,8 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.race_index = 0
     st.session_state.race_history = []
-    st.session_state.just_resumed = False  # Flag: if we just resumed after 2-win pause
+    st.session_state.just_resumed = False
 
-    # Pre-loaded races
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
         {"name": "Warragul • Race 9 - 1. Sweet Coin Babe (1)", "odds": 1.75},
@@ -82,7 +156,7 @@ if 'bankroll' not in st.session_state:
         {"name": "Q1 Lakeside • Race 11 - 7. Teresita (7)", "odds": 1.55},
     ]
 
-# Sidebar configuration
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
     initial_bankroll = st.number_input(
@@ -93,28 +167,29 @@ with st.sidebar:
     )
     wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
     st.markdown("---")
-    st.button("🔁 Reset All Data", on_click=lambda: [st.session_state.update({key: None for key in st.session_state}) or st.session_state.clear()])
+    st.button("🔁 Reset All Data", on_click=lambda: st.session_state.clear())
     st.markdown("---")
     st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
-    st.markdown(f"<small>Current Theme: **{st.session_state.theme.title()}**</small>", unsafe_allow_html=True)
+    st.markdown(f"<small>Current Theme: <strong>{st.session_state.theme.title()}</strong></small>", unsafe_allow_html=True)
 
-# Re-initialize bankroll if changed in sidebar
+# Re-init bankroll if changed
 if st.session_state.initial_bankroll != initial_bankroll:
-    st.session_state.initial_bankroll = initial_bankroll
-    st.session_state.bankroll = initial_bankroll
-    st.session_state.last_bet_amount = 0.0
-    st.session_state.last_odds = 0.0
-    st.session_state.consecutive_wins = 0
-    st.session_state.consecutive_losses = 0
-    st.session_state.race_index = 0
-    st.session_state.race_history = []
-    st.session_state.just_resumed = False
+    st.session_state.update({
+        'initial_bankroll': initial_bankroll,
+        'bankroll': initial_bankroll,
+        'last_bet_amount': 0.0,
+        'last_odds': 0.0,
+        'consecutive_wins': 0,
+        'consecutive_losses': 0,
+        'race_index': 0,
+        'race_history': [],
+        'just_resumed': False
+    })
 
 # Determine betting status
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# Rule: After 2 wins → pause until a loss
 if current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
@@ -125,7 +200,7 @@ else:
     st.session_state.betting_active = True
     betting_status = "🟢 Betting active"
 
-# Display status
+# Metrics
 col1, col2, col3 = st.columns(3)
 col1.metric("Bankroll", f"${st.session_state.bankroll:,.2f}")
 col2.metric("P&L", f"${st.session_state.bankroll - st.session_state.initial_bankroll:,.2f}")
@@ -145,27 +220,18 @@ st.markdown("---")
 st.subheader(f"Race {current_idx + 1} of {total_races}")
 st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
 
-# Show betting status
 st.info(betting_status)
 
-# Calculate recommended stake
+# Stake calculation
 if st.session_state.betting_active:
     if st.session_state.just_resumed:
-        # Reset to 1% of current bankroll after loss breaks 2-win pause
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
-        st.session_state.just_resumed = False  # Reset flag
+        st.session_state.just_resumed = False
     elif current_losses == 0:
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
         last_odds = st.session_state.last_odds
-        if last_odds > 2.00:
-            multiplier = 2
-        elif 1.50 < last_odds <= 2.00:
-            multiplier = 3
-        elif 1.25 < last_odds <= 1.50:
-            multiplier = 5
-        else:
-            multiplier = 1
+        multiplier = 2 if last_odds > 2.00 else 3 if 1.50 < last_odds <= 2.00 else 5 if 1.25 < last_odds <= 1.50 else 1
         recommended_stake = st.session_state.last_bet_amount * multiplier
 
     if recommended_stake > st.session_state.bankroll:
@@ -176,24 +242,14 @@ if st.session_state.betting_active:
 else:
     recommended_stake = 0.0
 
-# Win/Loss input — always enabled
+# Result input
 st.markdown("### Result")
-result = st.radio(
-    "Record result",
-    ["Win", "Loss"],
-    key=f"result_{current_idx}",
-    help="You can record the outcome even if betting is paused"
-)
+result = st.radio("Record result", ["Win", "Loss"], key=f"result_{current_idx}")
 
-# Action button
+# Record result
 if st.button("✅ Record Result"):
-    # Only place a bet if betting is active
-    if st.session_state.betting_active:
-        actual_stake = recommended_stake
-    else:
-        actual_stake = 0.0
+    actual_stake = recommended_stake if st.session_state.betting_active else 0.0
 
-    # Process result
     if result == "Win":
         payout = actual_stake * current_race['odds']
         profit_loss = payout - actual_stake
@@ -202,33 +258,25 @@ if st.button("✅ Record Result"):
         if st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-    else:  # Loss
+    else:
         payout = 0.0
         profit_loss = -actual_stake
         st.session_state.consecutive_losses += 1
         st.session_state.consecutive_wins = 0
 
-        # If currently paused due to 2 wins, and this is a loss → resume with 1% reset
         if current_wins >= 2:
             st.session_state.betting_active = True
-            st.session_state.just_resumed = True  # Trigger 1% reset on next race
-            st.session_state.last_odds = current_race['odds']  # Still log it for logic
-        # Else: update last bet/odds only if it was a real bet
+            st.session_state.just_resumed = True
+            st.session_state.last_odds = current_race['odds']
         elif st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
 
-    # Update bankroll
     st.session_state.bankroll += profit_loss
 
-    # Record in history
     st.session_state.race_history.append({
-        "Race": current_race['name'],
-        "Odds": current_race['odds'],
-        "Stake": round(actual_stake, 2),
-        "Result": result,
-        "Payout": round(payout, 2),
-        "P/L": round(profit_loss, 2),
+        "Race": current_race['name'], "Odds": current_race['odds'], "Stake": round(actual_stake, 2),
+        "Result": result, "Payout": round(payout, 2), "P/L": round(profit_loss, 2),
         "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
         "Bankroll After": round(st.session_state.bankroll, 2),
         "Wins Streak": st.session_state.consecutive_wins,
@@ -236,14 +284,13 @@ if st.button("✅ Record Result"):
         "Status": betting_status,
     })
 
-    # Move to next race
     st.session_state.race_index += 1
     st.rerun()
 
-# Progress indicator
+# Progress
 st.markdown(f"<center>Progress: {current_idx + 1} / {total_races}</center>", unsafe_allow_html=True)
 
-# Race History
+# History
 if st.session_state.race_history:
     st.markdown("---")
     st.subheader("📊 Race History")
@@ -264,4 +311,4 @@ if st.session_state.race_history:
 
 # Footer
 st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Features: 2-win pause, 1% reset on resumption, dark/light mode.")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Full visibility in both themes.")
