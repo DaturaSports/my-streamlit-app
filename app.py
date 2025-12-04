@@ -340,54 +340,82 @@ if st.button("⏭️ Skip This Race"):
     st.session_state.race_index += 1
     st.rerun()
 
+# --- DEBUG STATE (Remove after testing) ---
+st.markdown("---")
+with st.expander("🔧 Debug Session State (For Development Only)"):
+    st.write("### Current Session State Variables")
+    st.json({
+        "bankroll": round(st.session_state.bankroll, 2),
+        "last_bet_amount": round(st.session_state.last_bet_amount, 2),
+        "last_odds": round(st.session_state.last_odds, 2),
+        "consecutive_wins": st.session_state.consecutive_wins,
+        "consecutive_losses": st.session_state.consecutive_losses,
+        "betting_active": st.session_state.betting_active,
+        "just_resumed": st.session_state.just_resumed,
+        "current_race": current_race["name"],
+        "current_odds": current_race["odds"],
+        "recommended_stake": round(recommended_stake, 2)
+    })
+
 # --- PROCESS RESULT ---
 if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # THIS IS THE CRITICAL LINE: Use recommended_stake if betting is active, else 0
-    actual_stake_for_logging = recommended_stake if st.session_state.betting_active else 0.0
+    # --- CRITICAL: Determine the actual stake used in this race ---
+    # If we are resuming after a 2-win pause, we MUST use 1% of current bankroll
+    # Ignore any multiplier logic that might try to inflate it
+    if st.session_state.just_resumed:
+        actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
+        # Force last_bet_amount to this new stake after processing
+    else:
+        # Otherwise, use the recommended_stake logic
+        actual_stake = recommended_stake if st.session_state.betting_active else 0.0
 
-    profit_loss = 0.0
-    payout = 0.0
+    # Ensure stake doesn't exceed bankroll
+    if actual_stake > st.session_state.bankroll:
+        actual_stake = st.session_state.bankroll
 
+    # --- Calculate PnL ---
     if result == "Win":
-        if actual_stake_for_logging > 0:
-            payout = actual_stake_for_logging * current_race['odds']
-            profit_loss = payout - actual_stake_for_logging
+        if actual_stake > 0:
+            payout = actual_stake * current_race['odds']
+            profit_loss = payout - actual_stake
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
-            # Update last_bet_amount and last_odds ONLY if a real bet was placed and won
-            st.session_state.last_bet_amount = actual_stake_for_logging
+            # ✅ Update last_bet_amount to the ACTUAL stake placed
+            st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-        else: # Paused win
-            st.session_state.consecutive_wins += 1 # Still count win streak for pause logic
+        else:
+            # Paused race, but outcome is win
+            st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
+        st.session_state.bankroll += profit_loss
 
     else:  # Loss
-        if actual_stake_for_logging > 0:
-            profit_loss = -actual_stake_for_logging
+        if actual_stake > 0:
+            profit_loss = -actual_stake
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
-            # Update last_bet_amount and last_odds ONLY if a real bet was placed and lost
-            st.session_state.last_bet_amount = actual_stake_for_logging
+            # ✅ Update last_bet_amount to the ACTUAL stake lost
+            st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-        else: # Paused loss (0 stake)
-            # This loss might break a 2-win streak, allowing betting to resume
-            if st.session_state.consecutive_wins >= 2: # Was paused due to 2 wins
+        else:
+            # Paused race, outcome is loss — may break a win streak
+            if st.session_state.consecutive_wins >= 2:
                 st.session_state.just_resumed = True
-            st.session_state.consecutive_losses += 1 # Still count loss streak
+            st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
+            profit_loss = 0.0  # No financial impact
+        st.session_state.bankroll += profit_loss
 
-    st.session_state.bankroll += profit_loss
-
-    # Log race using the correctly determined actual_stake_for_logging
+    # --- Log the race with the CORRECT actual_stake ---
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
-        "Stake": round(actual_stake_for_logging, 2), # Corrected: Use this variable
+        "Stake": round(actual_stake, 2),  # ✅ This is now the true stake
         "Result": result,
-        "Payout": round(payout, 2),
+        "Payout": round(payout if 'payout' in locals() else 0.0, 2),
         "P/L": round(profit_loss, 2),
         "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
         "Bankroll After": round(st.session_state.bankroll, 2),
@@ -396,30 +424,12 @@ if 'result_input' in st.session_state:
         "Status": betting_status,
     })
 
+    # --- Reset just_resumed flag after using it ---
+    if st.session_state.just_resumed:
+        st.session_state.just_resumed = False
+
     st.session_state.race_index += 1
     st.rerun()
-
-# Progress
-st.markdown(f"<center>Progress: {current_idx + 1} / {total_races}</center>", unsafe_allow_html=True)
-
-# History
-if st.session_state.race_history:
-    st.markdown("---")
-    st.subheader("📊 Race History")
-    history_df = pd.DataFrame(st.session_state.race_history)
-    st.dataframe(
-        history_df[[
-            "Race", "Odds", "Stake", "Result", "P/L", "Cumulative P/L", "Bankroll After",
-            "Wins Streak", "Losses Streak", "Status"
-        ]].style.format({
-            "Odds": "{:.2f}",
-            "Stake": "${:,.2f}",
-            "P/L": "${:,.2f}",
-            "Cumulative P/L": "${:,.2f}",
-            "Bankroll After": "${:,.2f}",
-        }),
-        use_container_width=True
-    )
 
 # Edge Monitor
 st.markdown("---")
