@@ -4,7 +4,7 @@ import pandas as pd
 # Page configuration
 st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
-st.markdown("Track your strategy with automated no-bet rules and dynamic staking.")
+st.markdown("Track your strategy with automated pauses and dynamic staking.")
 
 # Initialize session state at the very top
 if 'bankroll' not in st.session_state:
@@ -65,15 +65,15 @@ if st.session_state.initial_bankroll != initial_bankroll:
     st.session_state.race_index = 0
     st.session_state.race_history = []
 
-# Determine betting eligibility
+# Determine betting status
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# Rule 1: After 2 wins → no betting until a loss occurs
+# Rule: After 2 wins → no betting until a loss occurs
 if current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
-# Rule 2: Optional wait until 2 losses
+# Optional: Wait until 2 losses before starting
 elif wait_after_two_losses and current_losses < 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – waiting for 2 losses"
@@ -107,10 +107,8 @@ st.info(betting_status)
 # Calculate recommended stake only if betting is active
 if st.session_state.betting_active:
     if current_losses == 0:
-        # First bet or reset after win cycle
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        # Apply multiplier based on last loss's odds
         last_odds = st.session_state.last_odds
         if last_odds > 2.00:
             multiplier = 2
@@ -122,7 +120,6 @@ if st.session_state.betting_active:
             multiplier = 1
         recommended_stake = st.session_state.last_bet_amount * multiplier
 
-    # Cap to bankroll
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
         st.warning("📉 Stake reduced to available bankroll.")
@@ -131,20 +128,22 @@ if st.session_state.betting_active:
 else:
     recommended_stake = 0.0
 
-# Win/Loss input
+# Win/Loss input — always enabled so user can record result even during pause
 st.markdown("### Result")
 result = st.radio(
-    "Select outcome",
+    "Record result",
     ["Win", "Loss"],
     key=f"result_{current_idx}",
-    disabled=not st.session_state.betting_active,
-    help="Betting paused – result will be recorded but no stake applied" if not st.session_state.betting_active else None
+    help="You can record the outcome even if betting is paused"
 )
 
 # Action button
 if st.button("✅ Record Result"):
-    # Initialize values
-    actual_stake = recommended_stake if st.session_state.betting_active and result in ["Win", "Loss"] else 0.0
+    # Only place a bet if betting is active AND the user selects Win/Loss
+    if st.session_state.betting_active:
+        actual_stake = recommended_stake
+    else:
+        actual_stake = 0.0
 
     # Process result
     if result == "Win":
@@ -152,24 +151,23 @@ if st.button("✅ Record Result"):
         profit_loss = payout - actual_stake
         st.session_state.consecutive_wins += 1
         st.session_state.consecutive_losses = 0
+        # Update last bet and odds only if it was a real bet
         if st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-    elif result == "Loss":
+    else:  # Loss
         payout = 0.0
         profit_loss = -actual_stake
+        # Reset wins, increment losses
         st.session_state.consecutive_losses += 1
         st.session_state.consecutive_wins = 0
-        # Only update last bet/odds if it was a real bet (i.e. betting was active)
+        # Only update last bet/odds if it was a real bet
         if st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-        # If this loss breaks a 2-win pause, reset wins so betting resumes
-        if current_wins >= 2:
-            st.session_state.consecutive_wins = 0
-    else:
-        payout = 0.0
-        profit_loss = 0.0
+        else:
+            # If this loss occurred during pause (e.g. after 2 wins), use *this race's odds* to set next stake
+            st.session_state.last_odds = current_race['odds']
 
     # Update bankroll
     st.session_state.bankroll += profit_loss
