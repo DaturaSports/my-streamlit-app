@@ -46,7 +46,7 @@ if st.session_state.theme == 'dark':
         }
         .result-button-container button {
             background-color: #262730;
-            color: #FFFFFF;
+            color: #FFFFFF !important; /* Ensure white text for buttons in dark mode */
             border: 1px solid #444;
             padding: 10px 20px;
             border-radius: 4px;
@@ -55,18 +55,18 @@ if st.session_state.theme == 'dark':
         }
         .result-button-container button:hover {
             background-color: #333333;
-            color: #FFFFFF;
+            color: #FFFFFF !important;
         }
         .stInfo {
             background-color: #1A1D21 !important;
-            color: #FFFFFF;
+            color: #FFFFFF !important;
         }
         .stWarning {
             background-color: #3C2A1F !important;
-            color: #FFD700; /* Yellow text for warnings in dark mode */
+            color: #FFD700 !important; /* Yellow background color for warnings in dark mode */
         }
         .stWarning > div > p { /* Target text inside st.warning */
-            color: #FFD700 !important;
+            color: #FFD700 !important; /* Ensure yellow text for warnings in dark mode */
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #FFFFFF !important;
@@ -112,7 +112,7 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
         }
         .result-button-container button {
             background-color: #F0F0F0;
-            color: #000000; /* Ensure black text for buttons in light mode */
+            color: #000000 !important; /* Ensure black text for buttons in light mode */
             border: 1px solid #CCCCCC;
             padding: 10px 20px;
             border-radius: 4px;
@@ -122,20 +122,20 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
         }
         .result-button-container button:hover {
             background-color: #DDDDDD;
-            color: #000000;
+            color: #000000 !important;
         }
         .stInfo {
             background-color: #E6F3FF !important;
-            color: #000000;
+            color: #000000 !important;
             border: 1px solid #B3D9FF;
         }
         .stWarning {
             background-color: #FFF3E0 !important;
-            color: #000000; /* Ensure black text for warnings in light mode */
+            color: #000000 !important; /* Ensure black text for warnings in light mode */
             border: 1px solid #FFB74D;
         }
         .stWarning > div > p { /* Target text inside st.warning */
-            color: #000000 !important;
+            color: #000000 !important; /* Ensure black text for warnings in light mode */
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #000000 !important;
@@ -193,7 +193,6 @@ with st.sidebar:
     st.markdown("---")
     st.button("🔁 Reset All Data", on_click=lambda: st.session_state.clear())
     st.markdown("---")
-    # ✅ Fixed: Changed 'on_on_click' to 'on_click'
     st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
     st.markdown(f"<small>Current Theme: <strong>{st.session_state.theme.title()}</strong></small>", unsafe_allow_html=True)
 
@@ -277,7 +276,7 @@ if st.session_state.betting_active:
 
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
-        st.warning("📉 Stake reduced to available bankroll.")
+        st.warning("📉 Stake reduced to available bankroll.") # This warning text is now explicitly styled
 
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
 else:
@@ -328,7 +327,6 @@ if 'result_input' in st.session_state:
 
     st.session_state.bankroll += profit_loss
 
-    # ✅ Fixed: Added 'Status' to the history entry
     st.session_state.race_history.append({
         "Race": current_race['name'], "Odds": current_race['odds'], "Stake": round(actual_stake, 2),
         "Result": result, "Payout": round(payout, 2), "P/L": round(profit_loss, 2),
@@ -336,7 +334,7 @@ if 'result_input' in st.session_state:
         "Bankroll After": round(st.session_state.bankroll, 2),
         "Wins Streak": st.session_state.consecutive_wins,
         "Losses Streak": st.session_state.consecutive_losses,
-        "Status": betting_status, # This key was missing, causing the KeyError
+        "Status": betting_status,
     })
 
     st.session_state.race_index += 1
@@ -350,11 +348,10 @@ if st.session_state.race_history:
     st.markdown("---")
     st.subheader("📊 Race History")
     history_df = pd.DataFrame(st.session_state.race_history)
-    # ✅ Fixed: Removed 'Status' from the column list since it's already in the data
     st.dataframe(
         history_df[[
             "Race", "Odds", "Stake", "Result", "P/L", "Cumulative P/L", "Bankroll After",
-            "Wins Streak", "Losses Streak"
+            "Wins Streak", "Losses Streak", "Status" # Re-added "Status" as it was correctly added to the dict
         ]].style.format({
             "Odds": "{:.2f}",
             "Stake": "${:,.2f}",
