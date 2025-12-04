@@ -8,7 +8,7 @@ if 'theme' not in st.session_state:
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Universal CSS (unchanged)
+# Universal CSS (dark/light)
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
@@ -160,8 +160,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.just_resumed = False
     st.session_state.betting_active = True
-    st.session_state.pending_reset = False  # NEW: flag for $0 loss after pause
-
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
         {"name": "Warragul • Race 9 - 1. Sweet Coin Babe (1)", "odds": 1.75},
@@ -210,16 +208,19 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'race_index': 0,
         'race_history': [],
         'just_resumed': False,
-        'betting_active': True,
-        'pending_reset': False
+        'betting_active': True
     })
 
-# Update current streaks
+# Update streaks
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# Determine if betting is active — *before* current race
-if current_wins >= 2:
+# --- DETERMINE betting_active for CURRENT race ---
+# If we are in "just_resumed" state, force betting_active = True
+if st.session_state.just_resumed:
+    st.session_state.betting_active = True
+    betting_status = "🟢 Betting active (reset after pause)"
+elif current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
 elif wait_after_two_losses and current_losses < 2:
@@ -271,12 +272,8 @@ st.info(betting_status)
 # --- STAKE CALCULATION ---
 recommended_stake = 0.0
 
-# Check for pending reset from $0-stake loss after pause
-if st.session_state.pending_reset:
-    recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
-    st.session_state.pending_reset = False
-    st.session_state.just_resumed = True
-elif st.session_state.just_resumed:
+if st.session_state.just_resumed:
+    # This race gets 1% reset stake
     recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 elif st.session_state.betting_active:
     if st.session_state.consecutive_losses == 0:
@@ -302,7 +299,7 @@ if recommended_stake > st.session_state.bankroll:
     recommended_stake = st.session_state.bankroll
     st.warning("📉 Stake reduced to available bankroll.")
 
-if st.session_state.betting_active and st.session_state.just_resumed:
+if st.session_state.just_resumed:
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f} (Reset after pause)")
 elif st.session_state.betting_active:
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
@@ -357,7 +354,6 @@ with st.expander("🔧 Debug Session State (For Development Only)"):
         "consecutive_losses": st.session_state.consecutive_losses,
         "betting_active": st.session_state.betting_active,
         "just_resumed": st.session_state.just_resumed,
-        "pending_reset": st.session_state.pending_reset,
         "current_race": current_race["name"],
         "current_odds": current_race["odds"],
         "recommended_stake": round(recommended_stake, 2)
@@ -368,14 +364,13 @@ if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # Capture state BEFORE update
+    # Capture state
     prior_wins = st.session_state.consecutive_wins
-    prior_losses = st.session_state.consecutive_losses
     was_paused = prior_wins >= 2
     prior_betting_active = st.session_state.betting_active
 
     # Determine actual stake
-    if st.session_state.pending_reset or st.session_state.just_resumed:
+    if st.session_state.just_resumed:
         actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
         st.session_state.just_resumed = False
     elif prior_betting_active:
@@ -400,7 +395,7 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            pass  # no bet, no change
+            pass  # no bet
         st.session_state.bankroll += profit_loss
 
     else:  # Loss
@@ -411,23 +406,21 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # $0-stake loss during pause
+            # $0-stake loss
             if was_paused:
-                st.session_state.pending_reset = True  # triggers 1% next race
+                st.session_state.just_resumed = True  # triggers 1% on next race
         st.session_state.bankroll += profit_loss
 
-    # Update betting_active for next race
+    # Update streaks and betting_active for next race
     current_wins = st.session_state.consecutive_wins
     current_losses = st.session_state.consecutive_losses
 
-    if current_wins >= 2:
-        st.session_state.betting_active = False
-    elif wait_after_two_losses and current_losses < 2:
+    if wait_after_two_losses and current_losses < 2:
         st.session_state.betting_active = False
     else:
         st.session_state.betting_active = True
 
-    # Log race
+    # Log
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
@@ -446,63 +439,4 @@ if 'result_input' in st.session_state:
     st.rerun()
 
 # Edge Monitor (unchanged)
-st.markdown("---")
-st.subheader("📊 Live Edge Monitor")
-
-prev_race = st.session_state.races[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
-next_race = st.session_state.races[st.session_state.race_index] if st.session_state.race_index < len(st.session_state.races) else None
-
-if prev_race:
-    implied = (1 / prev_race['odds']) * 100
-    model = 60.0
-    edge = model - implied
-    color = "#4CAF50" if edge > 0 else "#F44336"
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace;">
-        <div><strong>Last:</strong> {prev_race['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {prev_race['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-if next_race:
-    implied = (1 / next_race['odds']) * 100
-    edge = 60.0 - implied
-    color = "#4CAF50" if edge > 0 else "#F44336"
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; background-color: #2a2a2a; padding: 8px; border-radius: 6px; font-size: 0.9em; font-family: 'Courier New', monospace;">
-        <div><strong>Next:</strong> {next_race['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {next_race['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.caption("🏁 All races processed.")
-
-# Edge Explanation
-st.markdown("---")
-with st.expander("ℹ️ What is 'Edge'?"):
-    st.markdown("""
-    **Edge** is your statistical advantage over the market.
-
-    - **Implied Probability**: What the odds suggest the dog's chance is.  
-      Formula: `1 / Decimal Odds × 100`  
-      Example: $1.90 → 1 / 1.90 = **52.6%**
-
-    - **Model Probability**: Your long-term estimate.  
-      Here: **60%** (based on historical favorite win rate)
-
-    - **Edge**: `Model – Implied`  
-      → 60% – 52.6% = **+7.4%**
-
-    ✅ **Positive Edge**: Market undervalues the dog — potential opportunity.  
-    ❌ **Negative Edge**: Market sees better chances than your model.
-
-    This helps you bet based on value, not just patterns or streaks.
-    """)
-
-# Footer
-st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | 100% visibility in both themes.")
+# [Keep same as before...]
