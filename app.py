@@ -152,13 +152,13 @@ st.markdown("Track your strategy with auto-pause, reset stakes, and full visibil
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
-    st.session_state.last_bet_amount = 0.0  # Last actual bet amount (for recovery)
-    st.session_state.last_odds = 0.0        # Odds of the last actual bet
+    st.session_state.last_bet_amount = 0.0
+    st.session_state.last_odds = 0.0
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
     st.session_state.race_index = 0
     st.session_state.race_history = []
-    st.session_state.just_resumed = False   # Flag to indicate just resumed after 2 wins
+    st.session_state.just_resumed = False
     st.session_state.edge_history = []
 
     st.session_state.races = [
@@ -212,7 +212,7 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'edge_history': []
     })
 
-# Betting status
+# Update current streaks
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
@@ -271,37 +271,32 @@ recommended_stake = 0.0
 
 if st.session_state.betting_active:
     if st.session_state.just_resumed:
-        # After pause from two wins → reset to 1%
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
         st.session_state.just_resumed = False
     elif current_losses == 0:
-        # Fresh start or after win
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        # Recovery mode: only if last bet was real and lost
-        if st.session_state.last_bet_amount > 0:  # Ensure last_bet_amount is from an actual bet
+        if st.session_state.last_bet_amount > 0:
             last_odds = st.session_state.last_odds
             if last_odds > 2.00:
                 multiplier = 2
-            elif 1.50 < last_odds <= 2.00:  # Odds between 1.50 (exclusive) and 2.00 (inclusive)
+            elif 1.50 < last_odds <= 2.00:
                 multiplier = 3
-            elif 1.25 < last_odds <= 1.50:  # Odds between 1.25 (exclusive) and 1.50 (inclusive)
+            elif 1.25 < last_odds <= 1.50:
                 multiplier = 5
-            else:  # Odds <= 1.25, or other cases, default to 1x
+            else:
                 multiplier = 1
             recommended_stake = st.session_state.last_bet_amount * multiplier
         else:
-            # Last loss was $0-stake or no prior real bet → treat as fresh 1%
             recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 
-    # Cap recommended stake at current bankroll
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
         st.warning("📉 Stake reduced to available bankroll.")
 
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
 else:
-    recommended_stake = 0.0  # If not betting, recommended stake is 0
+    recommended_stake = 0.0
 
 # --- RESULT BUTTONS ---
 st.markdown("### Record Result")
@@ -323,11 +318,10 @@ if current_race['odds'] < MIN_ODDS_THRESHOLD:
     st.warning(f"⚠️ Odds (${current_race['odds']:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
 
 if st.button("⏭️ Skip This Race"):
-    # Log a skipped race with 0 stake
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
-        "Stake": 0.0,  # Explicitly 0 for skipped
+        "Stake": 0.0,
         "Result": "Skipped",
         "Payout": 0.0,
         "P/L": 0.0,
@@ -340,7 +334,7 @@ if st.button("⏭️ Skip This Race"):
     st.session_state.race_index += 1
     st.rerun()
 
-# --- DEBUG STATE (Remove after testing) ---
+# --- DEBUG STATE ---
 st.markdown("---")
 with st.expander("🔧 Debug Session State (For Development Only)"):
     st.write("### Current Session State Variables")
@@ -362,7 +356,10 @@ if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # Determine if this race should place a bet (based on state BEFORE result)
+    # Capture state BEFORE result
+    was_paused_due_to_wins = st.session_state.consecutive_wins >= 2
+
+    # Determine if bet should be placed (before result)
     should_bet = st.session_state.betting_active
 
     # Determine actual stake
@@ -374,11 +371,11 @@ if 'result_input' in st.session_state:
     else:
         actual_stake = 0.0
 
-    # Cap stake to bankroll
+    # Cap stake
     if actual_stake > st.session_state.bankroll:
         actual_stake = st.session_state.bankroll
 
-    # Initialize financials
+    # Initialize
     profit_loss = 0.0
     payout = 0.0
 
@@ -404,26 +401,22 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
+            profit_loss = 0.0
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
-            # Only set just_resumed if we WERE in pause mode
-            if current_wins >= 2:  # We were paused due to 2+ wins
+            if was_paused_due_to_wins:
                 st.session_state.just_resumed = True
-            profit_loss = 0.0
         st.session_state.bankroll += profit_loss
 
-    # --- 🔁 RECALCULATE betting_active IMMEDIATELY AFTER RESULT ---
-    current_wins = st.session_state.consecutive_wins
-    current_losses = st.session_state.consecutive_losses
-
-    if current_wins >= 2:
+    # --- Recalculate betting_active after result ---
+    if st.session_state.consecutive_wins >= 2:
         st.session_state.betting_active = False
-    elif wait_after_two_losses and current_losses < 2:
+    elif wait_after_two_losses and st.session_state.consecutive_losses < 2:
         st.session_state.betting_active = False
     else:
         st.session_state.betting_active = True
 
-    # Log the race
+    # Log race
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
