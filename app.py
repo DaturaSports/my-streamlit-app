@@ -272,9 +272,14 @@ if st.session_state.betting_active:
     elif current_losses == 0:
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        last_odds = st.session_state.last_odds
-        multiplier = 2 if last_odds > 2.00 else 3 if 1.50 < last_odds <= 2.00 else 5 if 1.25 < last_odds <= 1.50 else 1
-        recommended_stake = st.session_state.last_bet_amount * multiplier
+        # Only apply recovery multiplier if the last bet was a real bet (stake > 0)
+        if st.session_state.last_bet_amount > 0:
+            last_odds = st.session_state.last_odds
+            multiplier = 2 if last_odds > 2.00 else 3 if 1.50 < last_odds <= 2.00 else 5 if 1.25 < last_odds <= 1.50 else 1
+            recommended_stake = st.session_state.last_bet_amount * multiplier
+        else:
+            # If last "loss" was from 0-stake (e.g., after two wins), reset to base stake
+            recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
@@ -298,6 +303,30 @@ with col_loss:
         st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
+# ✅ Skip Race Button – Now triggers only if odds < $1.25
+MIN_ODDS_THRESHOLD = 1.25
+show_skip_warning = current_race['odds'] < MIN_ODDS_THRESHOLD
+
+if show_skip_warning:
+    st.warning(f"⚠️ Odds (${current_race['odds']:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
+
+if st.button("⏭️ Skip This Race"):
+    st.session_state.race_history.append({
+        "Race": current_race['name'],
+        "Odds": current_race['odds'],
+        "Stake": 0.0,
+        "Result": "Skipped",
+        "Payout": 0.0,
+        "P/L": 0.0,
+        "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
+        "Bankroll After": round(st.session_state.bankroll, 2),
+        "Wins Streak": st.session_state.consecutive_wins,
+        "Losses Streak": st.session_state.consecutive_losses,
+        "Status": "Skipped – Odds too low",
+    })
+    st.session_state.race_index += 1
+    st.rerun()
+
 # Only process if result was selected
 if 'result_input' in st.session_state:
     result = st.session_state.result_input
@@ -310,7 +339,8 @@ if 'result_input' in st.session_state:
         profit_loss = payout - actual_stake
         st.session_state.consecutive_wins += 1
         st.session_state.consecutive_losses = 0
-        if st.session_state.betting_active:
+        # Only update last bet if it was a real bet (stake > 0)
+        if st.session_state.betting_active and actual_stake > 0:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
     else:
@@ -319,11 +349,13 @@ if 'result_input' in st.session_state:
         st.session_state.consecutive_losses += 1
         st.session_state.consecutive_wins = 0
 
+        # Resume betting after 2-win pause
         if current_wins >= 2:
             st.session_state.betting_active = True
             st.session_state.just_resumed = True
-            st.session_state.last_odds = current_race['odds']
-        elif st.session_state.betting_active:
+            # Do NOT set last_odds here — next bet is fresh 1%
+        # Only update last bet if this was a real losing bet (stake > 0)
+        elif st.session_state.betting_active and actual_stake > 0:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
 
