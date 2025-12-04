@@ -6,35 +6,19 @@ st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
 st.markdown("Track your strategy with dynamic staking, race cycling, and bankroll management.")
 
-# Sidebar configuration
-with st.sidebar:
-    st.header("⚙️ Configuration")
-    initial_bankroll = st.number_input(
-        "Starting Bankroll ($)", min_value=1.0, value=1000.0, step=50.0, format="%.2f"
-    )
-    default_stake_pct = st.slider(
-        "Default Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
-    )
-    wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
-    st.markdown("---")
-    if st.button("🔁 Reset All Data"):
-        for key in st.session_state.keys():
-            del st.session_state[key]
-        st.rerun()
-
-# Initialize session state
+# Initialize session state at the very top
 if 'bankroll' not in st.session_state:
-    st.session_state.bankroll = initial_bankroll
-    st.session_state.initial_bankroll = initial_bankroll
+    st.session_state.bankroll = 1000.0
+    st.session_state.initial_bankroll = 1000.0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_odds = 0.0
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
-    st.session_state.betting_active = True  # Will be adjusted by logic
+    st.session_state.betting_active = True
     st.session_state.race_index = 0
     st.session_state.race_history = []
 
-    # Pre-loaded race list (in chronological order)
+    # Define the race list only once at initialization
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
         {"name": "Warragul • Race 9 - 1. Sweet Coin Babe (1)", "odds": 1.75},
@@ -55,15 +39,42 @@ if 'bankroll' not in st.session_state:
         {"name": "Q1 Lakeside • Race 11 - 7. Teresita (7)", "odds": 1.55},
     ]
 
+# Sidebar configuration
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    initial_bankroll = st.number_input(
+        "Starting Bankroll ($)", min_value=1.0, value=st.session_state.initial_bankroll, step=50.0, format="%.2f"
+    )
+    default_stake_pct = st.slider(
+        "Default Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
+    )
+    wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
+    st.markdown("---")
+    if st.button("🔁 Reset All Data"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+# Re-initialize bankroll if reset or changed in sidebar
+if st.session_state.initial_bankroll != initial_bankroll:
+    st.session_state.initial_bankroll = initial_bankroll
+    st.session_state.bankroll = initial_bankroll
+    st.session_state.last_bet_amount = 0.0
+    st.session_state.last_odds = 0.0
+    st.session_state.consecutive_wins = 0
+    st.session_state.consecutive_losses = 0
+    st.session_state.betting_active = True
+    st.session_state.race_index = 0
+    st.session_state.race_history = []
+
 # Update betting_active based on rules
 current_losses = st.session_state.consecutive_losses
 current_wins = st.session_state.consecutive_wins
 
 if wait_after_two_losses:
-    if current_losses < 2:
-        st.session_state.betting_active = False
-    else:
-        st.session_state.betting_active = True
+    st.session_state.betting_active = (current_losses >= 2)
+else:
+    st.session_state.betting_active = True
 
 # After 2 wins in a row → pause betting until next loss
 if current_wins >= 2:
@@ -92,13 +103,11 @@ st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
 # Calculate recommended stake
 if not st.session_state.betting_active:
     recommended_stake = 0.0
-    st.info("⏸️ Betting paused: Waiting for condition (2 wins paused or <2 losses).")
+    st.info("⏸️ Betting paused: Waiting for condition (2 wins or <2 losses).")
 else:
     if current_losses == 0:
-        # First bet or reset after win cycle
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        # Apply multiplier based on last race's odds
         last_odds = st.session_state.last_odds
         if last_odds > 2.00:
             multiplier = 2
@@ -110,7 +119,7 @@ else:
             multiplier = 1
         recommended_stake = st.session_state.last_bet_amount * multiplier
 
-    # Cap stake to available bankroll
+    # Cap to available bankroll
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
         st.warning("📉 Stake reduced to available bankroll.")
@@ -156,9 +165,9 @@ with col_act:
             "Odds": current_race['odds'],
             "Stake": actual_stake,
             "Result": result,
-            "Payout": payout,
-            "P/L": profit_loss,
-            "Cumulative P/L": st.session_state.bankroll - st.session_state.initial_bankroll,
+            "Payout": round(payout, 2),
+            "P/L": round(profit_loss, 2),
+            "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
             "Bankroll After": round(st.session_state.bankroll, 2),
             "Wins Streak": st.session_state.consecutive_wins,
             "Losses Streak": st.session_state.consecutive_losses,
@@ -173,7 +182,7 @@ with col_act:
         st.session_state.race_index += 1
         st.rerun()
 
-# Navigation status
+# Progress indicator
 st.markdown(f"<center>Progress: {current_idx + 1} / {total_races}</center>", unsafe_allow_html=True)
 
 # Race History
