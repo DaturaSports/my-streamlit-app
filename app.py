@@ -8,7 +8,7 @@ if 'theme' not in st.session_state:
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Universal CSS – no fragile class names
+# Universal CSS
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
@@ -73,7 +73,7 @@ if st.session_state.theme == 'dark':
         }
     </style>
     """, unsafe_allow_html=True)
-else:  # ✅ Light Mode – Full Black Text, High Contrast
+else:
     st.markdown("""
     <style>
         html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -159,7 +159,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_index = 0
     st.session_state.race_history = []
     st.session_state.just_resumed = False
-    st.session_state.edge_history = []  # Initialize edge history
+    st.session_state.edge_history = []
 
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
@@ -216,6 +216,7 @@ if st.session_state.initial_bankroll != initial_bankroll:
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
+# Only pause after exactly two wins in a row
 if current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
@@ -226,7 +227,7 @@ else:
     st.session_state.betting_active = True
     betting_status = "🟢 Betting active"
 
-# ✅ Custom Metrics – Fully Controlled, No Streamlit Fragility
+# Metrics
 col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown(f"""
@@ -237,10 +238,11 @@ with col1:
     """, unsafe_allow_html=True)
 with col2:
     pnl = st.session_state.bankroll - st.session_state.initial_bankroll
+    color = '#228B22' if pnl >= 0 else '#B22222'
     st.markdown(f"""
     <div class="custom-metric">
         <div class="custom-metric-label">P&L</div>
-        <div class="custom-metric-value" style="color: {'#228B22' if pnl >= 0 else '#B22222'};">
+        <div class="custom-metric-value" style="color: {color};">
             {'+' if pnl >= 0 else ''}${pnl:,.2f}
         </div>
     </div>
@@ -264,21 +266,32 @@ st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
 
 st.info(betting_status)
 
-# Stake calculation
+# Stake Calculation
+recommended_stake = 0.0
+
 if st.session_state.betting_active:
     if st.session_state.just_resumed:
+        # After pause from two wins, reset to base stake
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
         st.session_state.just_resumed = False
     elif current_losses == 0:
+        # Fresh win streak
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        # Only apply recovery multiplier if the last bet was a real bet (stake > 0)
+        # Recovery mode: only if last bet was real (stake > 0)
         if st.session_state.last_bet_amount > 0:
             last_odds = st.session_state.last_odds
-            multiplier = 2 if last_odds > 2.00 else 3 if 1.50 < last_odds <= 2.00 else 5 if 1.25 < last_odds <= 1.50 else 1
+            if last_odds > 2.00:
+                multiplier = 2
+            elif 1.50 < last_odds <= 2.00:
+                multiplier = 3
+            elif 1.25 < last_odds <= 1.50:
+                multiplier = 5
+            else:
+                multiplier = 1
             recommended_stake = st.session_state.last_bet_amount * multiplier
         else:
-            # If last "loss" was from 0-stake (e.g., after two wins), reset to base stake
+            # Last "loss" was 0-stake → treat as fresh start
             recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 
     if recommended_stake > st.session_state.bankroll:
@@ -289,7 +302,7 @@ if st.session_state.betting_active:
 else:
     recommended_stake = 0.0
 
-# ✅ Custom Win/Loss Buttons – No Radio Issues
+# Result Buttons
 st.markdown("### Record Result")
 st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
 col_win, col_loss = st.columns(2)
@@ -303,11 +316,9 @@ with col_loss:
         st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ✅ Skip Race Button – Now triggers only if odds < $1.25
+# Skip Race (only if odds < $1.25)
 MIN_ODDS_THRESHOLD = 1.25
-show_skip_warning = current_race['odds'] < MIN_ODDS_THRESHOLD
-
-if show_skip_warning:
+if current_race['odds'] < MIN_ODDS_THRESHOLD:
     st.warning(f"⚠️ Odds (${current_race['odds']:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
 
 if st.button("⏭️ Skip This Race"):
@@ -327,10 +338,10 @@ if st.button("⏭️ Skip This Race"):
     st.session_state.race_index += 1
     st.rerun()
 
-# Only process if result was selected
+# Process result
 if 'result_input' in st.session_state:
     result = st.session_state.result_input
-    del st.session_state.result_input  # Clear for next use
+    del st.session_state.result_input
 
     actual_stake = recommended_stake if st.session_state.betting_active else 0.0
 
@@ -339,21 +350,23 @@ if 'result_input' in st.session_state:
         profit_loss = payout - actual_stake
         st.session_state.consecutive_wins += 1
         st.session_state.consecutive_losses = 0
+
         # Only update last bet if it was a real bet (stake > 0)
         if st.session_state.betting_active and actual_stake > 0:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
-    else:
+
+    else:  # Loss
         payout = 0.0
         profit_loss = -actual_stake
         st.session_state.consecutive_losses += 1
         st.session_state.consecutive_wins = 0
 
-        # Resume betting after 2-win pause
+        # Resume betting after two-win pause
         if current_wins >= 2:
             st.session_state.betting_active = True
             st.session_state.just_resumed = True
-            # Do NOT set last_odds here — next bet is fresh 1%
+            # Do NOT set last_bet_amount or last_odds here
         # Only update last bet if this was a real losing bet (stake > 0)
         elif st.session_state.betting_active and actual_stake > 0:
             st.session_state.last_bet_amount = actual_stake
@@ -361,9 +374,14 @@ if 'result_input' in st.session_state:
 
     st.session_state.bankroll += profit_loss
 
+    # Log race
     st.session_state.race_history.append({
-        "Race": current_race['name'], "Odds": current_race['odds'], "Stake": round(actual_stake, 2),
-        "Result": result, "Payout": round(payout, 2), "P/L": round(profit_loss, 2),
+        "Race": current_race['name'],
+        "Odds": current_race['odds'],
+        "Stake": round(actual_stake, 2),
+        "Result": result,
+        "Payout": round(payout, 2),
+        "P/L": round(profit_loss, 2),
         "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
         "Bankroll After": round(st.session_state.bankroll, 2),
         "Wins Streak": st.session_state.consecutive_wins,
@@ -396,57 +414,43 @@ if st.session_state.race_history:
         use_container_width=True
     )
 
-# --- EDGE MONITOR SECTION (Passive Companion) ---
+# Edge Monitor
 st.markdown("---")
 st.subheader("📊 Live Edge Monitor")
 
-current_race_prev = race_list[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
-upcoming_race = race_list[st.session_state.race_index] if st.session_state.race_index < len(race_list) else None
+prev_race = race_list[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
+next_race = race_list[st.session_state.race_index] if st.session_state.race_index < len(race_list) else None
 
-# Display last race edge
-if current_race_prev:
-    implied_prob_percent = (1 / current_race_prev['odds']) * 100
-    model_prob_percent = 60.0  # Your model assumption
-    edge_percent = model_prob_percent - implied_prob_percent
-    edge_color = "#4CAF50" if edge_percent > 0 else "#F44336"
-
+if prev_race:
+    implied = (1 / prev_race['odds']) * 100
+    model = 60.0
+    edge = model - implied
+    color = "#4CAF50" if edge > 0 else "#F44336"
     st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace; margin-bottom: 8px;">
-        <div><strong>Last:</strong> {current_race_prev['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {current_race_prev['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied_prob_percent:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {edge_color};">{'+' if edge_percent >= 0 else ''}{edge_percent:.1f}%</span></div>
+    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace;">
+        <div><strong>Last:</strong> {prev_race['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {prev_race['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Log edge history
-    st.session_state.edge_history.append({
-        'race_num': st.session_state.race_index,
-        'dog': current_race_prev['name'].split(' - ')[-1],
-        'odds': round(current_race_prev['odds'], 2),
-        'implied_prob': round(implied_prob_percent, 1),
-        'model_prob': model_prob_percent,
-        'edge': round(edge_percent, 1)
-    })
-
-# Preview next race edge
-if upcoming_race:
-    implied_prob_percent = (1 / upcoming_race['odds']) * 100
-    edge_percent = 60.0 - implied_prob_percent
-    edge_color = "#4CAF50" if edge_percent > 0 else "#F44336"
-
+if next_race:
+    implied = (1 / next_race['odds']) * 100
+    edge = 60.0 - implied
+    color = "#4CAF50" if edge > 0 else "#F44336"
     st.markdown(f"""
     <div style="display: flex; justify-content: space-between; background-color: #2a2a2a; padding: 8px; border-radius: 6px; font-size: 0.9em; font-family: 'Courier New', monospace;">
-        <div><strong>Next:</strong> {upcoming_race['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {upcoming_race['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied_prob_percent:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {edge_color};">{'+' if edge_percent >= 0 else ''}{edge_percent:.1f}%</span></div>
+        <div><strong>Next:</strong> {next_race['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {next_race['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
     </div>
     """, unsafe_allow_html=True)
 else:
     st.caption("🏁 All races processed.")
 
-# --- EDGE EXPLAINER ---
+# Edge Explanation
 st.markdown("---")
 with st.expander("ℹ️ What is 'Edge'?"):
     st.markdown("""
