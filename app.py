@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 
-# Theme toggle state
+# Theme state
 if 'theme' not in st.session_state:
     st.session_state.theme = 'light'
 
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Apply theme via universal CSS (no fragile class names)
+# Universal CSS – no fragile class names
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
@@ -19,38 +19,43 @@ if st.session_state.theme == 'dark':
         [data-testid="stHeader"], [data-testid="stSidebar"] {
             background-color: #0E1117;
         }
-        .stRadio label, .stNumberInput label, .stMarkdown, .stText, .stCaption, label {
-            color: #FFFFFF !important;
-            font-weight: 500;
+        .custom-metric {
+            background-color: #1E1E1E;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 8px;
+            color: #FFFFFF;
+            font-family: monospace;
+            text-align: center;
         }
-        .st-emotion-cache-1v3fvav, /* Metric value */
-        .st-emotion-cache-1g6x8q  /* Metric label */ {
-            color: #FFFFFF !important;
+        .custom-metric-label {
+            font-size: 0.9em;
+            color: #BBBBBB;
+            margin-bottom: 4px;
         }
-        .stTextInput input, .stNumberInput input {
-            color: #FFFFFF !important;
-            background-color: #1E1E1E !important;
-            border: 1px solid #444 !important;
+        .custom-metric-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #FFFFFF;
         }
-        .stButton button {
+        .result-button {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .result-button button {
             background-color: #262730;
             color: #FFFFFF;
             border: 1px solid #444;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 1em;
+            width: 100px;
         }
-        .stButton button:hover {
+        .result-button button:hover {
             background-color: #333333;
             color: #FFFFFF;
-        }
-        .stDataFrame, .stTable {
-            color: #FFFFFF;
-        }
-        .stDataFrame th, .stDataFrame td,
-        .stTable th, .stTable td {
-            color: #FFFFFF !important;
-            background-color: #1E1E1E !important;
-        }
-        .stDataFrame th {
-            background-color: #2D2D2D !important;
         }
         .stInfo {
             background-color: #1A1D21 !important;
@@ -60,9 +65,12 @@ if st.session_state.theme == 'dark':
             background-color: #3C2A1F !important;
             color: #FFD700;
         }
+        .stMarkdown, label, .stText, .stCaption {
+            color: #FFFFFF !important;
+        }
     </style>
     """, unsafe_allow_html=True)
-else:  # Light Mode – High Contrast Fix
+else:  # ✅ Light Mode – Full Black Text, High Contrast
     st.markdown("""
     <style>
         html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -72,39 +80,46 @@ else:  # Light Mode – High Contrast Fix
         [data-testid="stHeader"], [data-testid="stSidebar"] {
             background-color: #FFFFFF;
         }
-        .stRadio label, .stNumberInput label, .stMarkdown, .stText, .stCaption, label {
-            color: #000000 !important;
+        .custom-metric {
+            background-color: #FFFFFF;
+            border: 1px solid #CCCCCC;
+            padding: 10px;
+            border-radius: 8px;
+            color: #000000;
+            font-family: monospace;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .custom-metric-label {
+            font-size: 0.9em;
+            color: #000000;
+            margin-bottom: 4px;
             font-weight: 500;
         }
-        .st-emotion-cache-1v3fvav, /* Metric value */
-        .st-emotion-cache-1g6x8q  /* Metric label */ {
-            color: #000000 !important;
+        .custom-metric-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #000000;
         }
-        .stTextInput input, .stNumberInput input {
-            color: #000000 !important;
-            background-color: #FFFFFF !important;
-            border: 1px solid #AAAAAA !important;
+        .result-button {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 16px 0 8px 0;
         }
-        .stButton button {
+        .result-button button {
             background-color: #F0F0F0;
             color: #000000;
             border: 1px solid #CCCCCC;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 1em;
+            width: 100px;
+            font-weight: 500;
         }
-        .stButton button:hover {
+        .result-button button:hover {
             background-color: #DDDDDD;
             color: #000000;
-        }
-        .stDataFrame, .stTable {
-            color: #000000;
-        }
-        .stDataFrame th, .stDataFrame td,
-        .stTable th, .stTable td {
-            color: #000000 !important;
-            background-color: #FFFFFF !important;
-        }
-        .stDataFrame th {
-            background-color: #F0F2F6 !important;
-            color: #000000 !important;
         }
         .stInfo {
             background-color: #E6F3FF !important;
@@ -116,13 +131,16 @@ else:  # Light Mode – High Contrast Fix
             color: #CC5500;
             border: 1px solid #FFB74D;
         }
+        .stMarkdown, label, .stText, .stCaption {
+            color: #000000 !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
 # Page config
 st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
-st.markdown("Track your strategy with auto-pause, reset stakes, and theme control.")
+st.markdown("Track your strategy with auto-pause, reset stakes, and full visibility.")
 
 # Initialize session state
 if 'bankroll' not in st.session_state:
@@ -172,7 +190,7 @@ with st.sidebar:
     st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
     st.markdown(f"<small>Current Theme: <strong>{st.session_state.theme.title()}</strong></small>", unsafe_allow_html=True)
 
-# Re-init bankroll if changed
+# Re-init on bankroll change
 if st.session_state.initial_bankroll != initial_bankroll:
     st.session_state.update({
         'initial_bankroll': initial_bankroll,
@@ -186,7 +204,7 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'just_resumed': False
     })
 
-# Determine betting status
+# Betting status
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
@@ -200,11 +218,27 @@ else:
     st.session_state.betting_active = True
     betting_status = "🟢 Betting active"
 
-# Metrics
+# ✅ Custom Metrics – Fully Controlled, No Streamlit Fragility
 col1, col2, col3 = st.columns(3)
-col1.metric("Bankroll", f"${st.session_state.bankroll:,.2f}")
-col2.metric("P&L", f"${st.session_state.bankroll - st.session_state.initial_bankroll:,.2f}")
-col3.markdown(f"**Streak:** {current_wins}W / {current_losses}L")
+with col1:
+    st.markdown(f"""
+    <div class="custom-metric">
+        <div class="custom-metric-label">Bankroll</div>
+        <div class="custom-metric-value">${st.session_state.bankroll:,.2f}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with col2:
+    pnl = st.session_state.bankroll - st.session_state.initial_bankroll
+    st.markdown(f"""
+    <div class="custom-metric">
+        <div class="custom-metric-label">P&L</div>
+        <div class="custom-metric-value" style="color: {'#228B22' if pnl >= 0 else '#B22222'};">
+            {'+' if pnl >= 0 else ''}${pnl:,.2f}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+with col3:
+    st.markdown(f"**Streak:** {current_wins}W / {current_losses}L")
 
 # Race Navigation
 race_list = st.session_state.races
@@ -242,12 +276,25 @@ if st.session_state.betting_active:
 else:
     recommended_stake = 0.0
 
-# Result input
+# ✅ Custom Win/Loss Buttons – No Radio Issues
 st.markdown("### Result")
-result = st.radio("Record result", ["Win", "Loss"], key=f"result_{current_idx}")
+st.markdown('<div class="result-button">', unsafe_allow_html=True)
+col_win, col_loss = st.columns(2)
+with col_win:
+    if st.button("✅ Win", key="btn_win"):
+        st.session_state.result_input = "Win"
+        st.rerun()
+with col_loss:
+    if st.button("❌ Loss", key="btn_loss"):
+        st.session_state.result_input = "Loss"
+        st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
-# Record result
-if st.button("✅ Record Result"):
+# Only process if result was selected
+if 'result_input' in st.session_state:
+    result = st.session_state.result_input
+    del st.session_state.result_input  # Clear for next use
+
     actual_stake = recommended_stake if st.session_state.betting_active else 0.0
 
     if result == "Win":
@@ -311,4 +358,4 @@ if st.session_state.race_history:
 
 # Footer
 st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Full visibility in both themes.")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | 100% visibility in both themes.")
