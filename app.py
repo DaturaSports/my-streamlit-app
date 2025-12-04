@@ -362,32 +362,39 @@ if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # --- CRITICAL: Determine the actual stake used in this race ---
-    # If we are resuming after a 2-win pause, we MUST use 1% of current bankroll
-    # Ignore any multiplier logic that might try to inflate it
-    if st.session_state.just_resumed:
-        actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
-        # Force last_bet_amount to this new stake after processing
-    else:
-        # Otherwise, use the recommended_stake logic
-        actual_stake = recommended_stake if st.session_state.betting_active else 0.0
+    # Determine if this race should place a bet
+    should_bet = st.session_state.betting_active
 
-    # Ensure stake doesn't exceed bankroll
+    # Determine actual stake
+    if st.session_state.just_resumed:
+        # This is the first race after breaking the 2-win pause
+        actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
+        st.session_state.just_resumed = False  # Reset after use
+    elif should_bet:
+        actual_stake = recommended_stake
+    else:
+        actual_stake = 0.0
+
+    # Cap stake to bankroll
     if actual_stake > st.session_state.bankroll:
         actual_stake = st.session_state.bankroll
 
-    # --- Calculate PnL ---
+    # Initialize financials
+    profit_loss = 0.0
+    payout = 0.0
+
+    # Process result
     if result == "Win":
         if actual_stake > 0:
             payout = actual_stake * current_race['odds']
             profit_loss = payout - actual_stake
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
-            # ✅ Update last_bet_amount to the ACTUAL stake placed
+            # Only update last_bet_amount and last_odds if a real bet was placed
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # Paused race, but outcome is win
+            # Win with no bet — still increment win streak
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
         st.session_state.bankroll += profit_loss
@@ -397,25 +404,28 @@ if 'result_input' in st.session_state:
             profit_loss = -actual_stake
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
-            # ✅ Update last_bet_amount to the ACTUAL stake lost
+            # Update last_bet_amount and last_odds for real losses
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # Paused race, outcome is loss — may break a win streak
-            if st.session_state.consecutive_wins >= 2:
-                st.session_state.just_resumed = True
+            # Loss with $0 stake — could break a win streak
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
-            profit_loss = 0.0  # No financial impact
+            # If we were paused due to 2+ wins, this loss allows resumption
+            if not st.session_state.betting_active and st.session_state.consecutive_wins == 0:
+                # Mark that the **next** race should be a fresh 1%
+                # But only if betting would now be active (i.e., pause is broken)
+                st.session_state.just_resumed = True
+
         st.session_state.bankroll += profit_loss
 
-    # --- Log the race with the CORRECT actual_stake ---
+    # Log the race
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
-        "Stake": round(actual_stake, 2),  # ✅ This is now the true stake
+        "Stake": round(actual_stake, 2),
         "Result": result,
-        "Payout": round(payout if 'payout' in locals() else 0.0, 2),
+        "Payout": round(payout, 2),
         "P/L": round(profit_loss, 2),
         "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
         "Bankroll After": round(st.session_state.bankroll, 2),
@@ -423,10 +433,6 @@ if 'result_input' in st.session_state:
         "Losses Streak": st.session_state.consecutive_losses,
         "Status": betting_status,
     })
-
-    # --- Reset just_resumed flag after using it ---
-    if st.session_state.just_resumed:
-        st.session_state.just_resumed = False
 
     st.session_state.race_index += 1
     st.rerun()
