@@ -2,9 +2,46 @@ import streamlit as st
 import pandas as pd
 
 # Page configuration
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'light'  # default
+
+# Toggle function
+def toggle_theme():
+    st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
+
+# Apply theme via CSS (custom styling for dark mode)
+if st.session_state.theme == 'dark':
+    st.markdown("""
+    <style>
+        .stApp { background-color: #0E1117; color: #FAFAFA; }
+        .stRadio > label, .stNumberInput > label, .stMarkdown, .stCaption { color: #FAFAFA !important; }
+        .st-bb { background-color: #0E1117 !important; }
+        .st-at { background-color: #1F1F1F !important; border: 1px solid #333 !important; }
+        .st-bc { color: #FAFAFA !important; }
+        .st-emotion-cache-10trblm { color: #FAFAFA !important; }
+        .st-emotion-cache-16idsys p { color: #FAFAFA !important; }
+        .st-emotion-cache-1kyxreq { border: 1px solid #333 !important; }
+        .st-emotion-cache-12w0qpk { background-color: #1F1F1F !important; border: 1px solid #333 !important; }
+        .st-emotion-cache-1v3fvav { color: #FAFAFA !important; }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+        .stApp { background-color: #FFFFFF; color: #000000; }
+        .stRadio > label, .stNumberInput > label, .stMarkdown, .stCaption { color: #000000 !important; }
+        .st-at { background-color: white !important; border: 1px solid #CCCCCC !important; }
+        .st-bc { color: #000000 !important; }
+        .st-emotion-cache-10trblm { color: #000000 !important; }
+        .st-emotion-cache-16idsys p { color: #000000 !important; }
+        .st-emotion-cache-12w0qpk { background-color: white !important; border: 1px solid #CCCCCC !important; }
+        .st-emotion-cache-1v3fvav { color: #000000 !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
 st.set_page_config(page_title="Australian Dog Racing Trial", layout="centered")
 st.title("🐕 Australian Dog Racing Trial")
-st.markdown("Track your strategy with automated pauses and dynamic staking.")
+st.markdown("Track your strategy with auto-pause, reset stakes, and theme control.")
 
 # Initialize session state at the very top
 if 'bankroll' not in st.session_state:
@@ -16,6 +53,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.consecutive_losses = 0
     st.session_state.race_index = 0
     st.session_state.race_history = []
+    st.session_state.just_resumed = False  # Flag: if we just resumed after 2-win pause
 
     # Pre-loaded races
     st.session_state.races = [
@@ -45,14 +83,14 @@ with st.sidebar:
         "Starting Bankroll ($)", min_value=1.0, value=st.session_state.initial_bankroll, step=50.0, format="%.2f"
     )
     default_stake_pct = st.slider(
-        "Default Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
+        "Base Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
     )
     wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
     st.markdown("---")
-    if st.button("🔁 Reset All Data"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
+    st.button("🔁 Reset All Data", on_click=lambda: [st.session_state.update({key: None for key in st.session_state}) or st.session_state.clear()])
+    st.markdown("---")
+    st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
+    st.markdown(f"<small>Current Theme: **{st.session_state.theme.title()}**</small>", unsafe_allow_html=True)
 
 # Re-initialize bankroll if changed in sidebar
 if st.session_state.initial_bankroll != initial_bankroll:
@@ -64,16 +102,16 @@ if st.session_state.initial_bankroll != initial_bankroll:
     st.session_state.consecutive_losses = 0
     st.session_state.race_index = 0
     st.session_state.race_history = []
+    st.session_state.just_resumed = False
 
 # Determine betting status
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# Rule: After 2 wins → no betting until a loss occurs
+# Rule: After 2 wins → pause until a loss
 if current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
-# Optional: Wait until 2 losses before starting
 elif wait_after_two_losses and current_losses < 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – waiting for 2 losses"
@@ -104,9 +142,13 @@ st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
 # Show betting status
 st.info(betting_status)
 
-# Calculate recommended stake only if betting is active
+# Calculate recommended stake
 if st.session_state.betting_active:
-    if current_losses == 0:
+    if st.session_state.just_resumed:
+        # Reset to 1% of current bankroll after loss breaks 2-win pause
+        recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+        st.session_state.just_resumed = False  # Reset flag
+    elif current_losses == 0:
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
         last_odds = st.session_state.last_odds
@@ -128,7 +170,7 @@ if st.session_state.betting_active:
 else:
     recommended_stake = 0.0
 
-# Win/Loss input — always enabled so user can record result even during pause
+# Win/Loss input — always enabled
 st.markdown("### Result")
 result = st.radio(
     "Record result",
@@ -139,7 +181,7 @@ result = st.radio(
 
 # Action button
 if st.button("✅ Record Result"):
-    # Only place a bet if betting is active AND the user selects Win/Loss
+    # Only place a bet if betting is active
     if st.session_state.betting_active:
         actual_stake = recommended_stake
     else:
@@ -151,22 +193,23 @@ if st.button("✅ Record Result"):
         profit_loss = payout - actual_stake
         st.session_state.consecutive_wins += 1
         st.session_state.consecutive_losses = 0
-        # Update last bet and odds only if it was a real bet
         if st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
     else:  # Loss
         payout = 0.0
         profit_loss = -actual_stake
-        # Reset wins, increment losses
         st.session_state.consecutive_losses += 1
         st.session_state.consecutive_wins = 0
-        # Only update last bet/odds if it was a real bet
-        if st.session_state.betting_active:
+
+        # If currently paused due to 2 wins, and this is a loss → resume with 1% reset
+        if current_wins >= 2:
+            st.session_state.betting_active = True
+            st.session_state.just_resumed = True  # Trigger 1% reset on next race
+            st.session_state.last_odds = current_race['odds']  # Still log it for logic
+        # Else: update last bet/odds only if it was a real bet
+        elif st.session_state.betting_active:
             st.session_state.last_bet_amount = actual_stake
-            st.session_state.last_odds = current_race['odds']
-        else:
-            # If this loss occurred during pause (e.g. after 2 wins), use *this race's odds* to set next stake
             st.session_state.last_odds = current_race['odds']
 
     # Update bankroll
@@ -215,4 +258,4 @@ if st.session_state.race_history:
 
 # Footer
 st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Logic: 60% expected win rate, 2-win pause, progressive loss recovery.")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | Features: 2-win pause, 1% reset on resumption, dark/light mode.")
