@@ -38,13 +38,13 @@ if st.session_state.theme == 'dark':
             font-weight: bold;
             color: #FFFFFF;
         }
-        .result-button {
+        .result-button-container {
             display: flex;
             justify-content: center;
             gap: 10px;
             margin: 10px 0;
         }
-        .result-button button {
+        .result-button-container button {
             background-color: #262730;
             color: #FFFFFF;
             border: 1px solid #444;
@@ -53,7 +53,7 @@ if st.session_state.theme == 'dark':
             font-size: 1em;
             width: 100px;
         }
-        .result-button button:hover {
+        .result-button-container button:hover {
             background-color: #333333;
             color: #FFFFFF;
         }
@@ -63,7 +63,10 @@ if st.session_state.theme == 'dark':
         }
         .stWarning {
             background-color: #3C2A1F !important;
-            color: #FFD700;
+            color: #FFD700; /* Yellow text for warnings in dark mode */
+        }
+        .stWarning > div > p { /* Target text inside st.warning */
+            color: #FFD700 !important;
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #FFFFFF !important;
@@ -101,15 +104,15 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
             font-weight: bold;
             color: #000000;
         }
-        .result-button {
+        .result-button-container {
             display: flex;
             justify-content: center;
             gap: 10px;
             margin: 16px 0 8px 0;
         }
-        .result-button button {
+        .result-button-container button {
             background-color: #F0F0F0;
-            color: #000000;
+            color: #000000; /* Ensure black text for buttons in light mode */
             border: 1px solid #CCCCCC;
             padding: 10px 20px;
             border-radius: 4px;
@@ -117,7 +120,7 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
             width: 100px;
             font-weight: 500;
         }
-        .result-button button:hover {
+        .result-button-container button:hover {
             background-color: #DDDDDD;
             color: #000000;
         }
@@ -128,8 +131,11 @@ else:  # ✅ Light Mode – Full Black Text, High Contrast
         }
         .stWarning {
             background-color: #FFF3E0 !important;
-            color: #CC5500;
+            color: #000000; /* Ensure black text for warnings in light mode */
             border: 1px solid #FFB74D;
+        }
+        .stWarning > div > p { /* Target text inside st.warning */
+            color: #000000 !important;
         }
         .stMarkdown, label, .stText, .stCaption {
             color: #000000 !important;
@@ -187,7 +193,7 @@ with st.sidebar:
     st.markdown("---")
     st.button("🔁 Reset All Data", on_click=lambda: st.session_state.clear())
     st.markdown("---")
-    st.button("🌓 Toggle Dark/Light Mode", on_click=toggle_theme)
+    st.button("🌓 Toggle Dark/Light Mode", on_on_click=toggle_theme)
     st.markdown(f"<small>Current Theme: <strong>{st.session_state.theme.title()}</strong></small>", unsafe_allow_html=True)
 
 # Re-init on bankroll change
@@ -270,15 +276,15 @@ if st.session_state.betting_active:
 
     if recommended_stake > st.session_state.bankroll:
         recommended_stake = st.session_state.bankroll
-        st.warning("📉 Stake reduced to available bankroll.")
+        st.warning("📉 Stake reduced to available bankroll.") # This warning text is now explicitly styled
 
     st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
 else:
     recommended_stake = 0.0
 
 # ✅ Custom Win/Loss Buttons – No Radio Issues
-st.markdown("### Result")
-st.markdown('<div class="result-button">', unsafe_allow_html=True)
+st.markdown("### Record Result") # Changed from "Result" to "Record Result" for clarity
+st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
 col_win, col_loss = st.columns(2)
 with col_win:
     if st.button("✅ Win", key="btn_win"):
