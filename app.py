@@ -8,7 +8,7 @@ if 'theme' not in st.session_state:
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# Universal CSS
+# Universal CSS (unchanged)
 if st.session_state.theme == 'dark':
     st.markdown("""
     <style>
@@ -159,7 +159,8 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_index = 0
     st.session_state.race_history = []
     st.session_state.just_resumed = False
-    st.session_state.edge_history = []
+    st.session_state.betting_active = True
+    st.session_state.pending_reset = False  # NEW: flag for $0 loss after pause
 
     st.session_state.races = [
         {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
@@ -209,14 +210,15 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'race_index': 0,
         'race_history': [],
         'just_resumed': False,
-        'edge_history': []
+        'betting_active': True,
+        'pending_reset': False
     })
 
 # Update current streaks
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# Determine if betting is active
+# Determine if betting is active — *before* current race
 if current_wins >= 2:
     st.session_state.betting_active = False
     betting_status = "⏸️ No bet – wait for a loss"
@@ -269,7 +271,12 @@ st.info(betting_status)
 # --- STAKE CALCULATION ---
 recommended_stake = 0.0
 
-if st.session_state.just_resumed:
+# Check for pending reset from $0-stake loss after pause
+if st.session_state.pending_reset:
+    recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+    st.session_state.pending_reset = False
+    st.session_state.just_resumed = True
+elif st.session_state.just_resumed:
     recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 elif st.session_state.betting_active:
     if st.session_state.consecutive_losses == 0:
@@ -350,6 +357,7 @@ with st.expander("🔧 Debug Session State (For Development Only)"):
         "consecutive_losses": st.session_state.consecutive_losses,
         "betting_active": st.session_state.betting_active,
         "just_resumed": st.session_state.just_resumed,
+        "pending_reset": st.session_state.pending_reset,
         "current_race": current_race["name"],
         "current_odds": current_race["odds"],
         "recommended_stake": round(recommended_stake, 2)
@@ -360,15 +368,14 @@ if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
 
-    # Capture state BEFORE any updates
-    prior_consecutive_wins = st.session_state.consecutive_wins
-    prior_consecutive_losses = st.session_state.consecutive_losses
-    was_paused_due_to_wins = prior_consecutive_wins >= 2
-    was_waiting_due_to_losses = wait_after_two_losses and prior_consecutive_losses < 2
+    # Capture state BEFORE update
+    prior_wins = st.session_state.consecutive_wins
+    prior_losses = st.session_state.consecutive_losses
+    was_paused = prior_wins >= 2
     prior_betting_active = st.session_state.betting_active
 
-    # Determine actual stake for P&L
-    if st.session_state.just_resumed:
+    # Determine actual stake
+    if st.session_state.pending_reset or st.session_state.just_resumed:
         actual_stake = st.session_state.bankroll * (default_stake_pct / 100)
         st.session_state.just_resumed = False
     elif prior_betting_active:
@@ -393,8 +400,7 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # No bet → do not update streaks
-            pass
+            pass  # no bet, no change
         st.session_state.bankroll += profit_loss
 
     else:  # Loss
@@ -405,18 +411,16 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # No bet → but if we were paused due to 2 wins, this $0 loss breaks it
-            if was_paused_due_to_wins:
-                st.session_state.just_resumed = True  # Triggers 1% reset on next race
+            # $0-stake loss during pause
+            if was_paused:
+                st.session_state.pending_reset = True  # triggers 1% next race
         st.session_state.bankroll += profit_loss
 
-    # --- 🔁 Recalculate betting_active for NEXT race ---
+    # Update betting_active for next race
     current_wins = st.session_state.consecutive_wins
     current_losses = st.session_state.consecutive_losses
 
-    if was_paused_due_to_wins and result == "Loss" and actual_stake == 0:
-        st.session_state.betting_active = True
-    elif current_wins >= 2:
+    if current_wins >= 2:
         st.session_state.betting_active = False
     elif wait_after_two_losses and current_losses < 2:
         st.session_state.betting_active = False
@@ -441,12 +445,12 @@ if 'result_input' in st.session_state:
     st.session_state.race_index += 1
     st.rerun()
 
-# Edge Monitor
+# Edge Monitor (unchanged)
 st.markdown("---")
 st.subheader("📊 Live Edge Monitor")
 
-prev_race = race_list[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
-next_race = race_list[st.session_state.race_index] if st.session_state.race_index < len(race_list) else None
+prev_race = st.session_state.races[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
+next_race = st.session_state.races[st.session_state.race_index] if st.session_state.race_index < len(st.session_state.races) else None
 
 if prev_race:
     implied = (1 / prev_race['odds']) * 100
