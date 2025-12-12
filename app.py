@@ -161,23 +161,13 @@ if 'bankroll' not in st.session_state:
     st.session_state.just_resumed = False
     st.session_state.betting_active = True
     st.session_state.races = [
-        {"name": "Warragul • Race 5 - 8. Sweet Trilby (8)", "odds": 1.90},
-        {"name": "Warragul • Race 9 - 1. Sweet Coin Babe (1)", "odds": 1.75},
-        {"name": "Wentworth Park • Race 1 - 3. Sabini (3)", "odds": 1.60},
-        {"name": "Ballarat • Race 3 - 2. Trust In Process (2)", "odds": 1.50},
-        {"name": "Ballarat • Race 4 - 1. Maximos (1)", "odds": 1.35},
-        {"name": "Ballarat • Race 5 - 1. Hard Style Leon (1)", "odds": 1.35},
-        {"name": "Angle Park • Race 3 - 4. Wicket (4)", "odds": 1.35},
-        {"name": "Casino • Race 5 - 6. Kicker Splash (6)", "odds": 1.90},
-        {"name": "Wentworth Park • Race 4 - 2. Winsome Rambo (2)", "odds": 1.50},
-        {"name": "Hobart • Race 3 - 1. Rojo Jojo (1)", "odds": 1.65},
-        {"name": "Q1 Lakeside • Race 3 - 4. Neame (4)", "odds": 1.45},
-        {"name": "Casino • Race 7 - 1. Bentley Harris (1)", "odds": 1.45},
-        {"name": "Angle Park • Race 6 - 7. Mallee Beauty (7)", "odds": 1.35},
-        {"name": "Wentworth Park • Race 7 - 8. Magpie Hector (8)", "odds": 1.40},
-        {"name": "Ballarat • Race 9 - 1. Flying Maverick (1)", "odds": 1.30},
-        {"name": "Hobart • Race 9 - 8. Push The Button (8)", "odds": 1.55},
-        {"name": "Q1 Lakeside • Race 11 - 7. Teresita (7)", "odds": 1.55},
+        {"name": "Gawler • Race 1 - 3. Harmonic Dancer (6)", "odds": 2.00},
+        {"name": "Pakenham • Race 4 - 7. Biancelli (6)", "odds": 2.50},
+        {"name": "Gawler • Race 3 - 2. Party Crasher (2)", "odds": 1.75},
+        {"name": "Eagle Farm • Race 5 - 16. Balance The Books (5)", "odds": 1.65},
+        {"name": "Pakenham • Race 8 - 3. Private Eye (5)", "odds": 2.15},
+        {"name": "Pakenham • Race 9 - 7. Persian Spirit (10)", "odds": 2.10},
+        {"name": "Gawler • Race 9 - 4. Cielao (4)", "odds": 2.10},
     ]
 
 # Sidebar
@@ -211,12 +201,10 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'betting_active': True
     })
 
-# Update streaks
+# Update betting status
 current_wins = st.session_state.consecutive_wins
 current_losses = st.session_state.consecutive_losses
 
-# --- DETERMINE betting_active for CURRENT race ---
-# If we are in "just_resumed" state, force betting_active = True
 if st.session_state.just_resumed:
     st.session_state.betting_active = True
     betting_status = "🟢 Betting active (reset after pause)"
@@ -273,7 +261,6 @@ st.info(betting_status)
 recommended_stake = 0.0
 
 if st.session_state.just_resumed:
-    # This race gets 1% reset stake
     recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
 elif st.session_state.betting_active:
     if st.session_state.consecutive_losses == 0:
@@ -283,10 +270,10 @@ elif st.session_state.betting_active:
             last_odds = st.session_state.last_odds
             if last_odds > 2.00:
                 multiplier = 2
-            elif 1.50 <= last_odds <= 2.00:
-                multiplier = 3
-            elif 1.25 <= last_odds < 1.50:
+            elif 1.25 <= last_odds <= 1.50:
                 multiplier = 5
+            elif last_odds <= 2.00:
+                multiplier = 3
             else:
                 multiplier = 1
             recommended_stake = st.session_state.last_bet_amount * multiplier
@@ -395,7 +382,7 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            pass  # no bet
+            pass
         st.session_state.bankroll += profit_loss
 
     else:  # Loss
@@ -406,12 +393,11 @@ if 'result_input' in st.session_state:
             st.session_state.last_bet_amount = actual_stake
             st.session_state.last_odds = current_race['odds']
         else:
-            # $0-stake loss
             if was_paused:
-                st.session_state.just_resumed = True  # triggers 1% on next race
+                st.session_state.just_resumed = True
         st.session_state.bankroll += profit_loss
 
-    # Update streaks and betting_active for next race
+    # Update betting_active for next race
     current_wins = st.session_state.consecutive_wins
     current_losses = st.session_state.consecutive_losses
 
@@ -420,7 +406,7 @@ if 'result_input' in st.session_state:
     else:
         st.session_state.betting_active = True
 
-    # Log
+    # Log result
     st.session_state.race_history.append({
         "Race": current_race['name'],
         "Odds": current_race['odds'],
@@ -438,5 +424,64 @@ if 'result_input' in st.session_state:
     st.session_state.race_index += 1
     st.rerun()
 
-# Edge Monitor (unchanged)
-# [Keep same as before...]
+# Edge Monitor
+st.markdown("---")
+st.subheader("📊 Live Edge Monitor")
+
+prev_race = st.session_state.races[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
+next_race = st.session_state.races[st.session_state.race_index] if st.session_state.race_index < len(st.session_state.races) else None
+
+if prev_race:
+    implied = (1 / prev_race['odds']) * 100
+    model = 60.0
+    edge = model - implied
+    color = "#4CAF50" if edge > 0 else "#F44336"
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace;">
+        <div><strong>Last:</strong> {prev_race['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {prev_race['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+if next_race:
+    implied = (1 / next_race['odds']) * 100
+    edge = 60.0 - implied
+    color = "#4CAF50" if edge > 0 else "#F44336"
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; background-color: #2a2a2a; padding: 8px; border-radius: 6px; font-size: 0.9em; font-family: 'Courier New', monospace;">
+        <div><strong>Next:</strong> {next_race['name'].split(' - ')[-1]}</div>
+        <div><strong>Odds:</strong> {next_race['odds']:.2f}</div>
+        <div><strong>Implied:</strong> {implied:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.caption("🏁 All races processed.")
+
+# Edge Explanation
+st.markdown("---")
+with st.expander("ℹ️ What is 'Edge'?"):
+    st.markdown("""
+    **Edge** is your statistical advantage over the market.
+
+    - **Implied Probability**: What the odds suggest the dog's chance is.  
+      Formula: `1 / Decimal Odds × 100`  
+      Example: $1.90 → 1 / 1.90 = **52.6%**
+
+    - **Model Probability**: Your long-term estimate.  
+      Here: **60%** (based on historical favorite win rate)
+
+    - **Edge**: `Model – Implied`  
+      → 60% – 52.6% = **+7.4%**
+
+    ✅ **Positive Edge**: Market undervalues the dog — potential opportunity.  
+    ❌ **Negative Edge**: Market sees better chances than your model.
+
+    This helps you bet based on value, not just patterns or streaks.
+    """)
+
+# Footer
+st.markdown("---")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | 100% visibility in both themes.")
