@@ -153,7 +153,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
     st.session_state.last_bet_amount = 0.0
-    st.session_state.last_odds = 0.0
     st.session_state.consecutive_wins = 0
     st.session_state.consecutive_losses = 0
     st.session_state.race_index = 0
@@ -192,7 +191,6 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'initial_bankroll': initial_bankroll,
         'bankroll': initial_bankroll,
         'last_bet_amount': 0.0,
-        'last_odds': 0.0,
         'consecutive_wins': 0,
         'consecutive_losses': 0,
         'race_index': 0,
@@ -251,9 +249,10 @@ if current_idx >= total_races:
     st.stop()
 
 current_race = race_list[current_idx]
+current_odds = current_race['odds']
 st.markdown("---")
 st.subheader(f"Race {current_idx + 1} of {total_races}")
-st.markdown(f"### {current_race['name']} @ **${current_race['odds']}**")
+st.markdown(f"### {current_race['name']} @ **${current_odds}**")
 
 st.info(betting_status)
 
@@ -266,19 +265,17 @@ elif st.session_state.betting_active:
     if st.session_state.consecutive_losses == 0:
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        if st.session_state.last_bet_amount > 0:
-            last_odds = st.session_state.last_odds
-            if last_odds > 2.00:
-                multiplier = 2
-            elif 1.25 <= last_odds <= 1.50:
-                multiplier = 5
-            elif last_odds <= 2.00:
-                multiplier = 3
-            else:
-                multiplier = 1
-            recommended_stake = st.session_state.last_bet_amount * multiplier
+        # Now: use CURRENT odds to determine multiplier
+        base_stake = st.session_state.last_bet_amount
+        if current_odds > 2.00:
+            multiplier = 2
+        elif 1.50 <= current_odds <= 2.00:
+            multiplier = 3
+        elif 1.25 <= current_odds < 1.50:
+            multiplier = 5
         else:
-            recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+            multiplier = 1
+        recommended_stake = base_stake * multiplier
 else:
     recommended_stake = 0.0
 
@@ -309,13 +306,13 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # Skip Race
 MIN_ODDS_THRESHOLD = 1.25
-if current_race['odds'] < MIN_ODDS_THRESHOLD:
-    st.warning(f"⚠️ Odds (${current_race['odds']:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
+if current_odds < MIN_ODDS_THRESHOLD:
+    st.warning(f"⚠️ Odds (${current_odds:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
 
 if st.button("⏭️ Skip This Race"):
     st.session_state.race_history.append({
         "Race": current_race['name'],
-        "Odds": current_race['odds'],
+        "Odds": current_odds,
         "Stake": 0.0,
         "Result": "Skipped",
         "Payout": 0.0,
@@ -336,13 +333,12 @@ with st.expander("🔧 Debug Session State (For Development Only)"):
     st.json({
         "bankroll": round(st.session_state.bankroll, 2),
         "last_bet_amount": round(st.session_state.last_bet_amount, 2),
-        "last_odds": round(st.session_state.last_odds, 2),
         "consecutive_wins": st.session_state.consecutive_wins,
         "consecutive_losses": st.session_state.consecutive_losses,
         "betting_active": st.session_state.betting_active,
         "just_resumed": st.session_state.just_resumed,
         "current_race": current_race["name"],
-        "current_odds": current_race["odds"],
+        "current_odds": current_odds,
         "recommended_stake": round(recommended_stake, 2)
     })
 
@@ -375,12 +371,11 @@ if 'result_input' in st.session_state:
     # Process result
     if result == "Win":
         if actual_stake > 0:
-            payout = actual_stake * current_race['odds']
+            payout = actual_stake * current_odds
             profit_loss = payout - actual_stake
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
             st.session_state.last_bet_amount = actual_stake
-            st.session_state.last_odds = current_race['odds']
         else:
             pass
         st.session_state.bankroll += profit_loss
@@ -391,7 +386,6 @@ if 'result_input' in st.session_state:
             st.session_state.consecutive_losses += 1
             st.session_state.consecutive_wins = 0
             st.session_state.last_bet_amount = actual_stake
-            st.session_state.last_odds = current_race['odds']
         else:
             if was_paused:
                 st.session_state.just_resumed = True
@@ -409,7 +403,7 @@ if 'result_input' in st.session_state:
     # Log result
     st.session_state.race_history.append({
         "Race": current_race['name'],
-        "Odds": current_race['odds'],
+        "Odds": current_odds,
         "Stake": round(actual_stake, 2),
         "Result": result,
         "Payout": round(payout, 2),
