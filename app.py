@@ -159,21 +159,21 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.just_resumed = False
     st.session_state.betting_active = True
+    # 🔁 New Races for Today
     st.session_state.races = [
-        {"name": "Gawler • Race 1 - 3. Harmonic Dancer (6)", "odds": 2.00},
-        {"name": "Pakenham • Race 4 - 7. Biancelli (6)", "odds": 2.50},
-        {"name": "Gawler • Race 3 - 2. Party Crasher (2)", "odds": 1.75},
-        {"name": "Eagle Farm • Race 5 - 16. Balance The Books (5)", "odds": 1.65},
-        {"name": "Pakenham • Race 8 - 3. Private Eye (5)", "odds": 2.15},
-        {"name": "Pakenham • Race 9 - 7. Persian Spirit (10)", "odds": 2.10},
-        {"name": "Gawler • Race 9 - 4. Cielao (4)", "odds": 2.10},
+        {"name": "Geelong • Race 1 - 1. Darkbonee (8)", "odds": 1.55},
+        {"name": "Randwick • Race 5 - 10. Alabama Fox (6)", "odds": 2.00},
+        {"name": "Geelong • Race 6 - 5. Harry's Yacht (9)", "odds": 2.20},
+        {"name": "Pinjarra • Race 1 - 7. A Summer Fling (8)", "odds": 1.75},
+        {"name": "Eagle Farm • Race 7 - 2. Ninja (11)", "odds": 2.35},
+        {"name": "Pinjarra • Race 4 - 3. Articole (2)", "odds": 1.70},
     ]
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuration")
     initial_bankroll = st.number_input(
-        "Starting Bankroll ($)", min_value=1.0, value=st.session_state.initial_bankroll, step=50.0, format="%.2f"
+        "Starting Bankroll (\$)", min_value=1.0, value=st.session_state.initial_bankroll, step=50.0, format="%.2f"
     )
     default_stake_pct = st.slider(
         "Base Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
@@ -222,7 +222,7 @@ with col1:
     st.markdown(f"""
     <div class="custom-metric">
         <div class="custom-metric-label">Bankroll</div>
-        <div class="custom-metric-value">${st.session_state.bankroll:,.2f}</div>
+        <div class="custom-metric-value">\${st.session_state.bankroll:,.2f}</div>
     </div>
     """, unsafe_allow_html=True)
 with col2:
@@ -232,7 +232,7 @@ with col2:
     <div class="custom-metric">
         <div class="custom-metric-label">P&L</div>
         <div class="custom-metric-value" style="color: {color};">
-            {'+' if pnl >= 0 else ''}${pnl:,.2f}
+            {'+' if pnl >= 0 else ''}\${pnl:,.2f}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -252,7 +252,7 @@ current_race = race_list[current_idx]
 current_odds = current_race['odds']
 st.markdown("---")
 st.subheader(f"Race {current_idx + 1} of {total_races}")
-st.markdown(f"### {current_race['name']} @ **${current_odds}**")
+st.markdown(f"### {current_race['name']} @ **\${current_odds}**")
 
 st.info(betting_status)
 
@@ -265,7 +265,7 @@ elif st.session_state.betting_active:
     if st.session_state.consecutive_losses == 0:
         recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
     else:
-        # Now: use CURRENT odds to determine multiplier
+        # 🔁 Now: use CURRENT race odds to determine recovery multiplier
         base_stake = st.session_state.last_bet_amount
         if current_odds > 2.00:
             multiplier = 2
@@ -284,9 +284,9 @@ if recommended_stake > st.session_state.bankroll:
     st.warning("📉 Stake reduced to available bankroll.")
 
 if st.session_state.just_resumed:
-    st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f} (Reset after pause)")
+    st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f} (Reset after pause)")
 elif st.session_state.betting_active:
-    st.info(f"💡 **Recommended Stake:** ${recommended_stake:,.2f}")
+    st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f}")
 else:
     st.info(betting_status)
 
@@ -307,7 +307,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # Skip Race
 MIN_ODDS_THRESHOLD = 1.25
 if current_odds < MIN_ODDS_THRESHOLD:
-    st.warning(f"⚠️ Odds (${current_odds:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
+    st.warning(f"⚠️ Odds (\${current_odds:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
 
 if st.button("⏭️ Skip This Race"):
     st.session_state.race_history.append({
@@ -462,7 +462,7 @@ with st.expander("ℹ️ What is 'Edge'?"):
 
     - **Implied Probability**: What the odds suggest the dog's chance is.  
       Formula: `1 / Decimal Odds × 100`  
-      Example: $1.90 → 1 / 1.90 = **52.6%**
+      Example: \$1.90 → 1 / 1.90 = **52.6%**
 
     - **Model Probability**: Your long-term estimate.  
       Here: **60%** (based on historical favorite win rate)
