@@ -159,7 +159,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.just_resumed = False
     st.session_state.betting_active = True
-    # 🔁 New Races for Today
+    st.session_state.use_perpetual = False  # New: mode switch
     st.session_state.races = [
         {"name": "Geelong • Race 1 - 1. Darkbonee (8)", "odds": 1.55},
         {"name": "Randwick • Race 5 - 10. Alabama Fox (6)", "odds": 2.00},
@@ -179,6 +179,11 @@ with st.sidebar:
         "Base Stake (% of bankroll)", min_value=0.1, max_value=10.0, value=1.0, step=0.1
     )
     wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
+    
+    # 🔁 New: Perpetual Mode Toggle
+    st.markdown("---")
+    st.session_state.use_perpetual = st.checkbox("🔁 Perpetual Race Run Mode", value=False)
+    
     st.markdown("---")
     st.button("🔁 Reset All Data", on_click=lambda: st.session_state.clear())
     st.markdown("---")
@@ -196,7 +201,8 @@ if st.session_state.initial_bankroll != initial_bankroll:
         'race_index': 0,
         'race_history': [],
         'just_resumed': False,
-        'betting_active': True
+        'betting_active': True,
+        'use_perpetual': st.session_state.use_perpetual
     })
 
 # Update betting status
@@ -239,110 +245,181 @@ with col2:
 with col3:
     st.markdown(f"**Streak:** {current_wins}W / {current_losses}L")
 
-# Race Navigation
-race_list = st.session_state.races
-current_idx = st.session_state.race_index
-total_races = len(race_list)
+# --- PERPETUAL RUN LOGIC ---
+if st.session_state.use_perpetual:
+    st.markdown("---")
+    st.subheader("🔁 Perpetual Race Run Mode")
+    st.info("You're in continuous mode. Select odds bracket to get stake recommendation.")
 
-if current_idx >= total_races:
-    st.success("🏁 All races completed!")
-    st.stop()
+    # Odds selection logic (your brackets)
+    odds_bracket = st.selectbox(
+        "Select Odds Bracket",
+        [
+            "1.25–1.50",
+            "1.50–1.75",
+            "1.75–2.00",
+            "2.00–2.25",
+            "2.25–2.50",
+            "2.50–3.00",
+            ">3.00"
+        ],
+        key="perp_odds_select"
+    )
 
-current_race = race_list[current_idx]
-current_odds = current_race['odds']
-st.markdown("---")
-st.subheader(f"Race {current_idx + 1} of {total_races}")
-st.markdown(f"### {current_race['name']} @ **\${current_odds}**")
+    # Map bracket to representative odds (midpoint or typical)
+    bracket_to_odds = {
+        "1.25–1.50": 1.37,
+        "1.50–1.75": 1.62,
+        "1.75–2.00": 1.87,
+        "2.00–2.25": 2.12,
+        "2.25–2.50": 2.37,
+        "2.50–3.00": 2.75,
+        ">3.00": 3.50
+    }
+    current_odds = bracket_to_odds[odds_bracket]
 
-st.info(betting_status)
+    st.markdown(f"### 🏁 Race {st.session_state.race_index + 1} (Perpetual)")
+    st.markdown(f"**Selected Odds:** \${current_odds:.2f}")
 
-# --- STAKE CALCULATION ---
-recommended_stake = 0.0
-
-if st.session_state.just_resumed:
-    recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
-elif st.session_state.betting_active:
-    if st.session_state.consecutive_losses == 0:
-        recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
-    else:
-        # 🔁 Now: use CURRENT race odds to determine recovery multiplier
-        base_stake = st.session_state.last_bet_amount
-        if current_odds > 2.00:
-            multiplier = 2
-        elif 1.50 <= current_odds <= 2.00:
-            multiplier = 3
-        elif 1.25 <= current_odds < 1.50:
-            multiplier = 5
-        else:
-            multiplier = 1
-        recommended_stake = base_stake * multiplier
-else:
-    recommended_stake = 0.0
-
-if recommended_stake > st.session_state.bankroll:
-    recommended_stake = st.session_state.bankroll
-    st.warning("📉 Stake reduced to available bankroll.")
-
-if st.session_state.just_resumed:
-    st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f} (Reset after pause)")
-elif st.session_state.betting_active:
-    st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f}")
-else:
     st.info(betting_status)
 
-# --- RESULT BUTTONS ---
-st.markdown("### Record Result")
-st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
-col_win, col_loss = st.columns(2)
-with col_win:
-    if st.button("✅ Win", key="btn_win"):
-        st.session_state.result_input = "Win"
+    # --- STAKE CALCULATION ---
+    recommended_stake = 0.0
+
+    if st.session_state.just_resumed:
+        recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+    elif st.session_state.betting_active:
+        if st.session_state.consecutive_losses == 0:
+            recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+        else:
+            base_stake = st.session_state.last_bet_amount
+            if current_odds > 2.00:
+                multiplier = 2
+            elif 1.50 <= current_odds <= 2.00:
+                multiplier = 3
+            elif 1.25 <= current_odds < 1.50:
+                multiplier = 5
+            else:
+                multiplier = 1
+            recommended_stake = base_stake * multiplier
+    else:
+        recommended_stake = 0.0
+
+    if recommended_stake > st.session_state.bankroll:
+        recommended_stake = st.session_state.bankroll
+        st.warning("📉 Stake reduced to available bankroll.")
+
+    if st.session_state.just_resumed:
+        st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f} (Reset after pause)")
+    elif st.session_state.betting_active:
+        st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f}")
+    else:
+        st.info(betting_status)
+
+    # --- RESULT BUTTONS ---
+    st.markdown("### Record Result")
+    st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
+    col_win, col_loss = st.columns(2)
+    with col_win:
+        if st.button("✅ Win", key="btn_win_perp"):
+            st.session_state.result_input = "Win"
+            st.session_state.current_perp_odds = current_odds
+            st.rerun()
+    with col_loss:
+        if st.button("❌ Loss", key="btn_loss_perp"):
+            st.session_state.result_input = "Loss"
+            st.session_state.current_perp_odds = current_odds
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- STANDARD RACE MODE ---
+else:
+    race_list = st.session_state.races
+    current_idx = st.session_state.race_index
+    total_races = len(race_list)
+
+    if current_idx >= total_races:
+        st.success("🏁 All races completed!")
+        st.stop()
+
+    current_race = race_list[current_idx]
+    current_odds = current_race['odds']
+    st.markdown("---")
+    st.subheader(f"Race {current_idx + 1} of {total_races}")
+    st.markdown(f"### {current_race['name']} @ **\${current_odds}**")
+
+    st.info(betting_status)
+
+    # --- STAKE CALCULATION ---
+    recommended_stake = 0.0
+
+    if st.session_state.just_resumed:
+        recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+    elif st.session_state.betting_active:
+        if st.session_state.consecutive_losses == 0:
+            recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+        else:
+            base_stake = st.session_state.last_bet_amount
+            if current_odds > 2.00:
+                multiplier = 2
+            elif 1.50 <= current_odds <= 2.00:
+                multiplier = 3
+            elif 1.25 <= current_odds < 1.50:
+                multiplier = 5
+            else:
+                multiplier = 1
+            recommended_stake = base_stake * multiplier
+    else:
+        recommended_stake = 0.0
+
+    if recommended_stake > st.session_state.bankroll:
+        recommended_stake = st.session_state.bankroll
+        st.warning("📉 Stake reduced to available bankroll.")
+
+    if st.session_state.just_resumed:
+        st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f} (Reset after pause)")
+    elif st.session_state.betting_active:
+        st.info(f"💡 **Recommended Stake:** \${recommended_stake:,.2f}")
+    else:
+        st.info(betting_status)
+
+    # --- RESULT BUTTONS ---
+    st.markdown("### Record Result")
+    st.markdown('<div class="result-button-container">', unsafe_allow_html=True)
+    col_win, col_loss = st.columns(2)
+    with col_win:
+        if st.button("✅ Win", key="btn_win"):
+            st.session_state.result_input = "Win"
+            st.rerun()
+    with col_loss:
+        if st.button("❌ Loss", key="btn_loss"):
+            st.session_state.result_input = "Loss"
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Skip Race
+    MIN_ODDS_THRESHOLD = 1.25
+    if current_odds < MIN_ODDS_THRESHOLD:
+        st.warning(f"⚠️ Odds (\${current_odds:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
+
+    if st.button("⏭️ Skip This Race"):
+        st.session_state.race_history.append({
+            "Race": current_race['name'],
+            "Odds": current_odds,
+            "Stake": 0.0,
+            "Result": "Skipped",
+            "Payout": 0.0,
+            "P/L": 0.0,
+            "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
+            "Bankroll After": round(st.session_state.bankroll, 2),
+            "Wins Streak": st.session_state.consecutive_wins,
+            "Losses Streak": st.session_state.consecutive_losses,
+            "Status": "Skipped – Odds too low",
+        })
+        st.session_state.race_index += 1
         st.rerun()
-with col_loss:
-    if st.button("❌ Loss", key="btn_loss"):
-        st.session_state.result_input = "Loss"
-        st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
 
-# Skip Race
-MIN_ODDS_THRESHOLD = 1.25
-if current_odds < MIN_ODDS_THRESHOLD:
-    st.warning(f"⚠️ Odds (\${current_odds:.2f}) below minimum threshold ({MIN_ODDS_THRESHOLD}). Consider skipping.")
-
-if st.button("⏭️ Skip This Race"):
-    st.session_state.race_history.append({
-        "Race": current_race['name'],
-        "Odds": current_odds,
-        "Stake": 0.0,
-        "Result": "Skipped",
-        "Payout": 0.0,
-        "P/L": 0.0,
-        "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
-        "Bankroll After": round(st.session_state.bankroll, 2),
-        "Wins Streak": st.session_state.consecutive_wins,
-        "Losses Streak": st.session_state.consecutive_losses,
-        "Status": "Skipped – Odds too low",
-    })
-    st.session_state.race_index += 1
-    st.rerun()
-
-# --- DEBUG STATE ---
-st.markdown("---")
-with st.expander("🔧 Debug Session State (For Development Only)"):
-    st.write("### Current Session State Variables")
-    st.json({
-        "bankroll": round(st.session_state.bankroll, 2),
-        "last_bet_amount": round(st.session_state.last_bet_amount, 2),
-        "consecutive_wins": st.session_state.consecutive_wins,
-        "consecutive_losses": st.session_state.consecutive_losses,
-        "betting_active": st.session_state.betting_active,
-        "just_resumed": st.session_state.just_resumed,
-        "current_race": current_race["name"],
-        "current_odds": current_odds,
-        "recommended_stake": round(recommended_stake, 2)
-    })
-
-# --- PROCESS RESULT ---
+# --- PROCESS RESULT (COMMON) ---
 if 'result_input' in st.session_state:
     result = st.session_state.result_input
     del st.session_state.result_input
@@ -368,6 +445,12 @@ if 'result_input' in st.session_state:
     profit_loss = 0.0
     payout = 0.0
 
+    # Use correct odds
+    if st.session_state.use_perpetual:
+        current_odds = st.session_state.current_perp_odds
+    else:
+        current_odds = current_race['odds'] if 'current_race' in locals() else 1.0
+
     # Process result
     if result == "Win":
         if actual_stake > 0:
@@ -375,107 +458,4 @@ if 'result_input' in st.session_state:
             profit_loss = payout - actual_stake
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
-            st.session_state.last_bet_amount = actual_stake
-        else:
-            pass
-        st.session_state.bankroll += profit_loss
-
-    else:  # Loss
-        if actual_stake > 0:
-            profit_loss = -actual_stake
-            st.session_state.consecutive_losses += 1
-            st.session_state.consecutive_wins = 0
-            st.session_state.last_bet_amount = actual_stake
-        else:
-            if was_paused:
-                st.session_state.just_resumed = True
-        st.session_state.bankroll += profit_loss
-
-    # Update betting_active for next race
-    current_wins = st.session_state.consecutive_wins
-    current_losses = st.session_state.consecutive_losses
-
-    if wait_after_two_losses and current_losses < 2:
-        st.session_state.betting_active = False
-    else:
-        st.session_state.betting_active = True
-
-    # Log result
-    st.session_state.race_history.append({
-        "Race": current_race['name'],
-        "Odds": current_odds,
-        "Stake": round(actual_stake, 2),
-        "Result": result,
-        "Payout": round(payout, 2),
-        "P/L": round(profit_loss, 2),
-        "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
-        "Bankroll After": round(st.session_state.bankroll, 2),
-        "Wins Streak": st.session_state.consecutive_wins,
-        "Losses Streak": st.session_state.consecutive_losses,
-        "Status": betting_status,
-    })
-
-    st.session_state.race_index += 1
-    st.rerun()
-
-# Edge Monitor
-st.markdown("---")
-st.subheader("📊 Live Edge Monitor")
-
-prev_race = st.session_state.races[st.session_state.race_index - 1] if st.session_state.race_index > 0 else None
-next_race = st.session_state.races[st.session_state.race_index] if st.session_state.race_index < len(st.session_state.races) else None
-
-if prev_race:
-    implied = (1 / prev_race['odds']) * 100
-    model = 60.0
-    edge = model - implied
-    color = "#4CAF50" if edge > 0 else "#F44336"
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace;">
-        <div><strong>Last:</strong> {prev_race['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {prev_race['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-if next_race:
-    implied = (1 / next_race['odds']) * 100
-    edge = 60.0 - implied
-    color = "#4CAF50" if edge > 0 else "#F44336"
-    st.markdown(f"""
-    <div style="display: flex; justify-content: space-between; background-color: #2a2a2a; padding: 8px; border-radius: 6px; font-size: 0.9em; font-family: 'Courier New', monospace;">
-        <div><strong>Next:</strong> {next_race['name'].split(' - ')[-1]}</div>
-        <div><strong>Odds:</strong> {next_race['odds']:.2f}</div>
-        <div><strong>Implied:</strong> {implied:.1f}%</div>
-        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.caption("🏁 All races processed.")
-
-# Edge Explanation
-st.markdown("---")
-with st.expander("ℹ️ What is 'Edge'?"):
-    st.markdown("""
-    **Edge** is your statistical advantage over the market.
-
-    - **Implied Probability**: What the odds suggest the dog's chance is.  
-      Formula: `1 / Decimal Odds × 100`  
-      Example: \$1.90 → 1 / 1.90 = **52.6%**
-
-    - **Model Probability**: Your long-term estimate.  
-      Here: **60%** (based on historical favorite win rate)
-
-    - **Edge**: `Model – Implied`  
-      → 60% – 52.6% = **+7.4%**
-
-    ✅ **Positive Edge**: Market undervalues the dog — potential opportunity.  
-    ❌ **Negative Edge**: Market sees better chances than your model.
-
-    This helps you bet based on value, not just patterns or streaks.
-    """)
-
-# Footer
-st.markdown("---")
-st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | 100% visibility in both themes.")
+            st.session_state.last_bet游戏副本
