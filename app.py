@@ -159,7 +159,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.just_resumed = False
     st.session_state.betting_active = True
-    st.session_state.use_perpetual = False  # New: mode switch
+    st.session_state.use_perpetual = False
     st.session_state.races = [
         {"name": "Geelong • Race 1 - 1. Darkbonee (8)", "odds": 1.55},
         {"name": "Randwick • Race 5 - 10. Alabama Fox (6)", "odds": 2.00},
@@ -180,7 +180,7 @@ with st.sidebar:
     )
     wait_after_two_losses = st.checkbox("Wait to bet until 2 losses in a row occur", value=False)
     
-    # 🔁 New: Perpetual Mode Toggle
+    # Perpetual Mode Toggle
     st.markdown("---")
     st.session_state.use_perpetual = st.checkbox("🔁 Perpetual Race Run Mode", value=False)
     
@@ -245,41 +245,33 @@ with col2:
 with col3:
     st.markdown(f"**Streak:** {current_wins}W / {current_losses}L")
 
-# --- PERPETUAL RUN LOGIC ---
+# --- PERPETUAL RUN MODE ---
 if st.session_state.use_perpetual:
     st.markdown("---")
     st.subheader("🔁 Perpetual Race Run Mode")
-    st.info("You're in continuous mode. Select odds bracket to get stake recommendation.")
+    st.info("Select an odds bracket to get stake recommendation.")
 
-    # Odds selection logic (your brackets)
+    # Only three brackets
     odds_bracket = st.selectbox(
         "Select Odds Bracket",
         [
             "1.25–1.50",
-            "1.50–1.75",
-            "1.75–2.00",
-            "2.00–2.25",
-            "2.25–2.50",
-            "2.50–3.00",
-            ">3.00"
+            "1.51–2.00",
+            "2.01+"
         ],
         key="perp_odds_select"
     )
 
-    # Map bracket to representative odds (midpoint or typical)
+    # Map to internal odds for calculation
     bracket_to_odds = {
-        "1.25–1.50": 1.37,
-        "1.50–1.75": 1.62,
-        "1.75–2.00": 1.87,
-        "2.00–2.25": 2.12,
-        "2.25–2.50": 2.37,
-        "2.50–3.00": 2.75,
-        ">3.00": 3.50
+        "1.25–1.50": 1.50,
+        "1.51–2.00": 1.75,
+        "2.01+": 2.10
     }
     current_odds = bracket_to_odds[odds_bracket]
 
     st.markdown(f"### 🏁 Race {st.session_state.race_index + 1} (Perpetual)")
-    st.markdown(f"**Selected Odds:** \${current_odds:.2f}")
+    st.markdown(f"**Selected Odds Bracket:** `{odds_bracket}`")
 
     st.info(betting_status)
 
@@ -293,11 +285,11 @@ if st.session_state.use_perpetual:
             recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
         else:
             base_stake = st.session_state.last_bet_amount
-            if current_odds > 2.00:
+            if odds_bracket == "2.01+":
                 multiplier = 2
-            elif 1.50 <= current_odds <= 2.00:
+            elif odds_bracket == "1.51–2.00":
                 multiplier = 3
-            elif 1.25 <= current_odds < 1.50:
+            elif odds_bracket == "1.25–1.50":
                 multiplier = 5
             else:
                 multiplier = 1
@@ -323,11 +315,13 @@ if st.session_state.use_perpetual:
     with col_win:
         if st.button("✅ Win", key="btn_win_perp"):
             st.session_state.result_input = "Win"
+            st.session_state.current_perp_bracket = odds_bracket
             st.session_state.current_perp_odds = current_odds
             st.rerun()
     with col_loss:
         if st.button("❌ Loss", key="btn_loss_perp"):
             st.session_state.result_input = "Loss"
+            st.session_state.current_perp_bracket = odds_bracket
             st.session_state.current_perp_odds = current_odds
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
@@ -448,8 +442,16 @@ if 'result_input' in st.session_state:
     # Use correct odds
     if st.session_state.use_perpetual:
         current_odds = st.session_state.current_perp_odds
+        current_bracket = st.session_state.current_perp_bracket
     else:
         current_odds = current_race['odds'] if 'current_race' in locals() else 1.0
+        # Determine bracket for logging
+        if current_odds < 1.50:
+            current_bracket = "1.25–1.50"
+        elif 1.50 <= current_odds <= 2.00:
+            current_bracket = "1.51–2.00"
+        else:
+            current_bracket = "2.01+"
 
     # Process result
     if result == "Win":
@@ -458,4 +460,90 @@ if 'result_input' in st.session_state:
             profit_loss = payout - actual_stake
             st.session_state.consecutive_wins += 1
             st.session_state.consecutive_losses = 0
-            st.session_state.last_bet游戏副本
+            st.session_state.last_bet_amount = actual_stake
+        st.session_state.bankroll += profit_loss
+
+    else:  # Loss
+        if actual_stake > 0:
+            profit_loss = -actual_stake
+            st.session_state.consecutive_losses += 1
+            st.session_state.consecutive_wins = 0
+            st.session_state.last_bet_amount = actual_stake
+        else:
+            if was_paused:
+                st.session_state.just_resumed = True
+        st.session_state.bankroll += profit_loss
+
+    # Update betting_active for next race
+    current_wins = st.session_state.consecutive_wins
+    current_losses = st.session_state.consecutive_losses
+
+    if wait_after_two_losses and current_losses < 2:
+        st.session_state.betting_active = False
+    else:
+        st.session_state.betting_active = True
+
+    # Log result
+    st.session_state.race_history.append({
+        "Race": f"Race {len(st.session_state.race_history) + 1}" if st.session_state.use_perpetual else current_race['name'],
+        "Odds Bracket": current_bracket,
+        "Stake": round(actual_stake, 2),
+        "Result": result,
+        "Payout": round(payout, 2),
+        "P/L": round(profit_loss, 2),
+        "Cumulative P/L": round(st.session_state.bankroll - st.session_state.initial_bankroll, 2),
+        "Bankroll After": round(st.session_state.bankroll, 2),
+        "Wins Streak": st.session_state.consecutive_wins,
+        "Losses Streak": st.session_state.consecutive_losses,
+        "Status": betting_status,
+    })
+
+    st.session_state.race_index += 1
+    st.rerun()
+
+# Edge Monitor
+st.markdown("---")
+st.subheader("📊 Live Edge Monitor")
+
+prev_race = st.session_state.race_history[-1] if len(st.session_state.race_history) > 0 else None
+next_race = True  # Always show next in perpetual
+
+if prev_race:
+    implied = (1 / current_odds) * 100 if st.session_state.use_perpetual else (1 / current_race['odds']) * 100
+    model = 60.0
+    edge = model - implied
+    color = "#4CAF50" if edge > 0 else "#F44336"
+    st.markdown(f"""
+    <div style="display: flex; justify-content: space-between; background-color: #1e1e1e; padding: 10px; border-radius: 6px; font-family: 'Courier New', monospace;">
+        <div><strong>Last:</strong> {prev_race['Race']}</div>
+        <div><strong>Bracket:</strong> {prev_race['Odds Bracket']}</div>
+        <div><strong>Implied:</strong> {implied:.1f}%</div>
+        <div><strong>Edge:</strong> <span style="color: {color};">{'+' if edge >= 0 else ''}{edge:.1f}%</span></div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Edge Explanation
+st.markdown("---")
+with st.expander("ℹ️ What is 'Edge'?"):
+    st.markdown("""
+    **Edge** is your statistical advantage over the market.
+
+    - **Implied Probability**: What the odds suggest the dog's chance is.  
+      Formula: `1 / Decimal Odds × 100`  
+      Example: \$1.90 → 1 / 1.90 = **52.6%**
+
+    - **Model Probability**: Your long-term estimate.  
+      Here: **60%** (based on historical favorite win rate)
+
+    - **Edge**: `Model – Implied`  
+      → 60% – 52.6% = **+7.4%**
+
+    ✅ **Positive Edge**: Market undervalues the dog — potential opportunity.  
+    ❌ **Negative Edge**: Market sees better chances than your model.
+
+    This helps you bet based on value, not just patterns or streaks.
+    """)
+
+# Footer
+st.markdown("---")
+st.caption("© 2025 Rei Labs | Dog Racing Strategy Trial | 3 fixed odds brackets | Perpetual mode supported.")
