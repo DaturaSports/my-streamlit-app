@@ -1,130 +1,121 @@
 import streamlit as st
-import pandas as pd
 
-# Theme state
+# --- THEME & UI SETUP ---
 if 'theme' not in st.session_state:
     st.session_state.theme = 'light'
 
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
-# CSS for UI
-if st.session_state.theme == 'dark':
-    st.markdown("""<style>
-        html, body, [data-testid="stAppViewContainer"] { background-color: #0E1117; color: #FFFFFF; }
-        .custom-metric { background-color: #1E1E1E; border: 1px solid #333; padding: 10px; border-radius: 8px; text-align: center; }
-        .stInfo { background-color: #1A1D21 !important; color: #FFFFFF !important; }
-    </style>""", unsafe_allow_html=True)
-else:
-    st.markdown("""<style>
-        html, body, [data-testid="stAppViewContainer"] { background-color: #FFFFFF; color: #000000; }
-        .custom-metric { background-color: #F0F2F6; border: 1px solid #CCC; padding: 10px; border-radius: 8px; text-align: center; }
-    </style>""", unsafe_allow_html=True)
-
-st.title("🐕 Australian Dog Racing Trial")
+st.set_page_config(page_title="Datura Edge Tracker", layout="wide")
 
 # Initialize session state
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
-    st.session_state.consecutive_losses = 0
-    st.session_state.consecutive_wins = 0
-    st.session_state.race_history = []
+    st.session_state.streak = 1  # Matches 'Current Streak' in your sheet
     st.session_state.last_bet_amount = 0.0
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Settings")
+    st.header("Settings")
     st.session_state.initial_bankroll = st.number_input("Starting Bankroll (\$)", value=1000.0)
-    default_stake_pct = st.slider("Base Stake (%)", 0.1, 10.0, 1.0)
-    st.session_state.use_perpetual = st.checkbox("🔁 Perpetual Race Run Mode", value=True)
-    st.button("🌓 Toggle Theme", on_click=toggle_theme)
-    if st.button("🔁 Reset Data"):
+    win_rate_base = st.slider("Overall Win Rate (%)", 1.0, 100.0, 60.0) / 100
+    base_stake_pct = st.slider("Base Stake (%)", 0.1, 10.0, 1.0)
+    if st.button("🌓 Toggle Theme"):
+        toggle_theme()
+        st.rerun()
+    if st.button("🔁 Reset Session"):
         st.session_state.clear()
         st.rerun()
 
-# Metrics
+# --- MAIN INTERFACE ---
+st.title("🐕 Datura Dog Racing Model")
+
+# Top Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
-col1, col2, col3 = st.columns(3)
-col1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
-col2.metric("P&L", f"\${pnl:,.2f}", delta=pnl)
-col3.metric("Streak", f"{st.session_state.consecutive_wins}W / {st.session_state.consecutive_losses}L")
+c1, c2, c3 = st.columns(3)
+c1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
+c2.metric("P&L", f"\${pnl:,.2f}", delta=f"{pnl:,.2f}")
+c3.metric("Current Streak", st.session_state.streak)
 
-# --- PERPETUAL MODE LOGIC ---
-if st.session_state.use_perpetual:
-    st.subheader("🔁 Race Entry")
+st.divider()
+
+# --- CALCULATION ENGINE ---
+col_input, col_display = st.columns([1, 1])
+
+with col_input:
+    st.subheader("Race Parameters")
+    # Manual Odds Input
+    bookie_odds = st.number_input("Enter Bookmaker Odds", min_value=1.01, value=1.67, step=0.05)
     
-    odds_bracket = st.selectbox("Select Odds Bracket", ["1.25–1.50", "1.51–2.00", "2.01+"])
+    # 1. Implied Probability
+    implied_prob = (1 / bookie_odds) * 100
     
-    # Map bracket to a representative odds value for the calculation
-    bracket_map = {"1.25–1.50": 1.35, "1.51–2.00": 1.75, "2.01+": 2.10}
-    current_odds = bracket_map[odds_bracket]
+    # 2. Over/Under Index (Matches Column D)
+    # Formula: Current Streak * Overall Win Rate
+    ou_index = (st.session_state.streak * (win_rate_base * 100))
     
-    # --- NEW EDGE LOGIC FROM SPREADSHEET ---
-    # 1. Implied
-    implied_prob = (1 / current_odds) * 100
+    # 3. Datura Weighted Probability (Matches Column G)
+    # Formula: (OU Index + Implied Prob) / 2
+    weighted_prob = (ou_index + implied_prob) / 2
     
-    # 2. Over Indexing (Based on Lost Streak)
-    # If wins > 0, we treat streak as 1 for the base calculation, or 0 if paused
-    streak_val = st.session_state.consecutive_losses if st.session_state.consecutive_losses > 0 else 1
-    over_indexing = streak_val * 60.0 # The 60% multiplier from your sheet
+    # 4. Datura Edge (Matches Column H)
+    # Formula: Weighted Prob - Implied Prob
+    datura_edge = weighted_prob - implied_prob
+
+with col_display:
+    st.subheader("Model Analysis")
     
-    # 3. Weighted & Edge
-    # Constant 7.04 derived from the sheet's relationship between 1.67 avg and odds
-    weighted_prob = 7.04 + over_indexing
-    edge_val = weighted_prob - implied_prob
+    # Using st.info and standard markdown to avoid HTML artifacts
+    st.markdown(f"**Implied Probability:** {implied_prob:.2f}%")
+    st.markdown(f"**Over/Under Index:** {ou_index:.2f}%")
+    st.markdown(f"**Datura Weighted Prob:** {weighted_prob:.2f}%")
+    
+    edge_color = "green" if datura_edge > 0 else "red"
+    st.markdown(f"### Datura Edge: :{edge_color}[{datura_edge:.2f}%]")
+    
+    # Staking Logic
+    recommended_stake = st.session_state.bankroll * (base_stake_pct / 100)
+    if st.session_state.streak > 1:
+        # Recovery multiplier based on streak
+        recommended_stake = recommended_stake * st.session_state.streak
 
-    # UI for Edge
-    edge_color = "green" if edge_val > 0 else "red"
-    st.markdown(f"""
-    <div style="background-color: #1E3A5F; color: white; padding: 15px; border-radius: 10px; border: 1px solid #333;">
-        <b style="font-size: 1.1em;">📊 Model Edge Analysis</b>
+    st.success(f"Recommended Stake: **\${recommended_stake:,.2f}**")
 
-        Current Odds: <b>{current_odds}</b> | Implied: <b>{implied_prob:.2f}%</b>
+# --- ACTION BUTTONS ---
+st.divider()
+btn_win, btn_loss = st.columns(2)
 
-        Lost Streak Factor: <b>{streak_val}</b> | Over Indexing: <b>{over_indexing:.2f}%</b>
-
-        Weighted Probability: <b>{weighted_prob:.2f}%</b>
-
-        <span style="font-size: 1.2em;">Calculated Edge: <b style="color: {edge_color};">{edge_val:.2f}%</b></span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Stake Calculation
-    if st.session_state.consecutive_losses == 0:
-        recommended_stake = st.session_state.bankroll * (default_stake_pct / 100)
+if btn_win.button("✅ RACE WIN", use_container_width=True):
+    profit = (recommended_stake * bookie_odds) - recommended_stake
+    st.session_state.bankroll += profit
+    # If we were in a losing streak, reset to -1 (Wins in a row). 
+    # If already winning, increment the negative streak.
+    if st.session_state.streak > 0:
+        st.session_state.streak = -1
     else:
-        mult = 5 if current_odds < 1.50 else (3 if current_odds <= 2.00 else 2)
-        recommended_stake = st.session_state.last_bet_amount * mult
+        st.session_state.streak -= 1
+    st.rerun()
 
-    st.info(f"💡 Recommended Stake: **\${recommended_stake:,.2f}**")
+if btn_loss.button("❌ RACE LOSS", use_container_width=True):
+    st.session_state.bankroll -= recommended_stake
+    # If we were in a winning streak, reset to 1 (Losses in a row).
+    # If already losing, increment the positive streak.
+    if st.session_state.streak < 0:
+        st.session_state.streak = 1
+    else:
+        st.session_state.streak += 1
+    st.rerun()
 
-    # Result Buttons
-    c1, c2 = st.columns(2)
-    if c1.button("✅ WIN", use_container_width=True):
-        st.session_state.bankroll += (recommended_stake * current_odds) - recommended_stake
-        st.session_state.consecutive_wins += 1
-        st.session_state.consecutive_losses = 0
-        st.session_state.last_bet_amount = recommended_stake
-        st.rerun()
-    if c2.button("❌ LOSS", use_container_width=True):
-        st.session_state.bankroll -= recommended_stake
-        st.session_state.consecutive_losses += 1
-        st.session_state.consecutive_wins = 0
-        st.session_state.last_bet_amount = recommended_stake
-        st.rerun()
-
-# --- EDGE EXPLAINER ---
-st.markdown("---")
-with st.expander("ℹ️ How your Edge is calculated"):
-    st.markdown(f"""
-    This model uses a **Weighted Probability** approach based on your specific spreadsheet logic:
+# --- EXPLAINER ---
+with st.expander("📖 Logic Explainer (Based on Spreadsheet)"):
+    st.write("""
+    **How the Edge is calculated:**
+    1. **Implied Prob**: 1 / Bookie Odds.
+    2. **Over/Under Index**: Your Current Streak multiplied by the 60% baseline.
+    3. **Weighted Prob**: The average of the Implied Prob and the Over/Under Index.
+    4. **Edge**: The difference between our Weighted Prob and the Bookie's Implied Prob.
     
-    1.  **Implied Probability**: Calculated directly from the market odds (\$1 / Odds\$).
-    2.  **Over Indexing**: Your "Lost Streak Bet Number" multiplied by your base factor (**60%**).
-    3.  **Weighted Probability**: We take a base constant (**7.04%**) and add your current **Over Indexing** value.
-    4.  **The Edge**: The difference between the **Weighted Probability** and the **Implied Probability**.
-    
-    *Example from your sheet:*  
-    Odds of **2.0** (50% Implied) at a **Lost Streak of 2** (120% Over Indexing) results in a **35% Edge**.
+    *Note: Positive streaks represent Losses in a Row. Negative streaks represent Wins in a Row.*
     """)
