@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from datetime import datetime
 
 # --- THEME & SESSION STATE INIT ---
@@ -18,6 +19,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.last_bet_amount = 0.0
     st.session_state.race_history = []
     st.session_state.selected_race = None
+    st.session_state.current_odds = 0.0
 
 # Sidebar
 with st.sidebar:
@@ -30,18 +32,18 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- TODAY'S RACES ---
+# --- TODAY'S RACES (Barrier numbers in parentheses) ---
 races = [
-    "Flemington • Race 4 - 14. Yes I Know (2.00)",
-    "Flemington • Race 5 - 6. Celerity (4.00)",
-    "Doomben • Race 3 - 14. Stein (6.00)",
-    "Doomben • Race 5 - 9. Noble Decree (5.00)",
-    "Rosehill • Race 8 - 5. Band Of Brothers (1.00)",
-    "Ascot • Race 3 - 6. Our Paladin Al (1.00)",
-    "Flemington • Race 10 - 8. Sass Appeal (9.00)",
-    "Gold Coast • Race 8 - 1. Ninja (17.00)",
-    "Rosehill • Race 10 - 7. Cross Tasman (3.00)",
-    "Doomben • Race 8 - 7. Ten Deep (1.00)"
+    "Flemington • Race 4 - 14. Yes I Know (2)",
+    "Flemington • Race 5 - 6. Celerity (4)",
+    "Doomben • Race 3 - 14. Stein (6)",
+    "Doomben • Race 5 - 9. Noble Decree (5)",
+    "Rosehill • Race 8 - 5. Band Of Brothers (1)",
+    "Ascot • Race 3 - 6. Our Paladin Al (1)",
+    "Flemington • Race 10 - 8. Sass Appeal (9)",
+    "Gold Coast • Race 8 - 1. Ninja (17)",
+    "Rosehill • Race 10 - 7. Cross Tasman (3)",
+    "Doomben • Race 8 - 7. Ten Deep (1)"
 ]
 
 # --- MAIN INTERFACE ---
@@ -54,7 +56,6 @@ col1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
 col2.metric("P&L", f"\${pnl:,.2f}", delta=f"{pnl:,.2f}")
 col3.metric("Win Streak", f"{st.session_state.consecutive_wins}W")
 
-# Divider
 st.divider()
 
 # --- RACE SELECTION ---
@@ -64,20 +65,35 @@ st.session_state.selected_race = st.selectbox("Choose a race:", races, index=Non
 if not st.session_state.selected_race:
     st.info("Please select a race to continue.")
 else:
-    # Parse race data
-    parts = st.session_state.selected_race.split("(")
-    name_part = parts[0].strip()
-    odds = float(parts[1].strip(")"))
-    
-    # Extract horse number and name
-    name_part_clean = name_part.split("-")[-1].strip()
-    horse_info = f"{name_part.split('•')[0].strip()} • {name_part.split('•')[1].split('-')[0].strip()} - {name_part_clean}"
+    # Parse race: extract track, race number, horse number, name, and barrier
+    try:
+        track_race_part = st.session_state.selected_race.split("-")[0].strip()
+        horse_part = "-".join(st.session_state.selected_race.split("-")[1:]).strip()
+        barrier = horse_part.split("(")[-1].strip(")")
+        horse_name = horse_part.split(f"({barrier})")[0].strip()
+        full_race_label = f"{track_race_part} - {horse_name} (Barrier {barrier})"
+    except:
+        full_race_label = st.session_state.selected_race
+        barrier = "Unknown"
+        horse_name = st.session_state.selected_race
 
-    st.markdown(f"**Selected:** {horse_info} | **Odds:** {odds}")
+    st.markdown(f"**Selected:** {full_race_label}")
+
+    # --- ODDS INPUT (Dynamic) ---
+    st.subheader("Enter Bookmaker Odds")
+    odds_input = st.number_input(
+        "Odds", 
+        min_value=1.01, 
+        value=1.67, 
+        step=0.01, 
+        format="%.2f",
+        key="odds_input_field"
+    )
+    st.session_state.current_odds = odds_input
 
     # --- CALCULATIONS ---
-    implied_prob = (1 / odds) * 100
-    current_streak_for_index = st.session_state.consecutive_wins + 1  # Base index logic
+    implied_prob = (1 / st.session_state.current_odds) * 100
+    current_streak_for_index = st.session_state.consecutive_wins + 1
     ou_index = current_streak_for_index * (win_rate_base * 100)
     weighted_prob = (ou_index + implied_prob) / 2
     datura_edge = weighted_prob - implied_prob
@@ -88,20 +104,20 @@ else:
         st.warning("⏸️ 2 Wins in a row. Paused betting until a loss occurs.")
     else:
         if st.session_state.last_bet_amount == 0:
-            # First bet or restarting after pause
-            recommended_stake = st.session_state.bankroll * 0.01  # 1% base
+            # First bet: 1% of current bankroll
+            recommended_stake = st.session_state.bankroll * 0.01
         else:
-            if odds > 2.00:
+            if st.session_state.current_odds > 2.00:
                 recommended_stake = st.session_state.last_bet_amount * 2
-            elif 1.50 < odds <= 2.00:
+            elif 1.50 < st.session_state.current_odds <= 2.00:
                 recommended_stake = st.session_state.last_bet_amount * 3
-            elif 1.25 < odds <= 1.50:
+            elif 1.25 < st.session_state.current_odds <= 1.50:
                 recommended_stake = st.session_state.last_bet_amount * 5
             else:
-                # Odds ≤ 1.25 — very low edge, use base 1%
+                # Odds ≤ 1.25 — too short, use 1% base
                 recommended_stake = st.session_state.bankroll * 0.01
 
-    # Cap stake to available bankroll
+    # Cap to available funds
     recommended_stake = min(recommended_stake, st.session_state.bankroll)
 
     # --- DISPLAY OUTPUT ---
@@ -123,20 +139,21 @@ else:
 
     if col_win.button("✅ WIN", use_container_width=True):
         if st.session_state.selected_race:
-            profit = (recommended_stake * odds) - recommended_stake
+            profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
             st.session_state.bankroll += profit
             st.session_state.consecutive_wins += 1
             st.session_state.last_bet_amount = recommended_stake
             # Log race
             st.session_state.race_history.append({
-                "race": horse_info,
-                "odds": odds,
+                "race": full_race_label,
+                "odds": st.session_state.current_odds,
                 "stake": recommended_stake,
                 "result": "WIN",
                 "profit": profit,
                 "timestamp": datetime.now().strftime("%H:%M:%S")
             })
             st.session_state.selected_race = None
+            st.session_state.current_odds = 1.67
             st.rerun()
 
     if col_loss.button("❌ LOSS", use_container_width=True):
@@ -146,14 +163,15 @@ else:
             st.session_state.last_bet_amount = recommended_stake
             # Log race
             st.session_state.race_history.append({
-                "race": horse_info,
-                "odds": odds,
+                "race": full_race_label,
+                "odds": st.session_state.current_odds,
                 "stake": recommended_stake,
                 "result": "LOSS",
                 "profit": -recommended_stake,
                 "timestamp": datetime.now().strftime("%H:%M:%S")
             })
             st.session_state.selected_race = None
+            st.session_state.current_odds = 1.67
             st.rerun()
 
 # --- RACE HISTORY ---
@@ -161,7 +179,7 @@ if st.session_state.race_history:
     st.divider()
     st.subheader("📋 Race History")
     history_df = pd.DataFrame(st.session_state.race_history)
-    st.dataframe(history_df, use_container_width=True)
+    st.dataframe(history_df, use_container_width=True, hide_index=True)
 
 # --- EXPLAINER ---
 with st.expander("ℹ️ Stake & Edge Logic"):
@@ -173,12 +191,14 @@ with st.expander("ℹ️ Stake & Edge Logic"):
     - **Edge**: \$\\text{Weighted} - \\text{Implied}\$
 
     ### **Stake Rules**
-    - After a **loss**:
-      - Odds > \$2.00 → **Double** last bet
-      - \$1.50–\$2.00 → **Triple**
-      - \$1.25–\$1.50 → **5×**
-    - After **2 consecutive wins** → **Pause betting** until a loss.
-    - First bet uses **1% of bankroll**.
+    After a **loss**:
+    - Odds > \$2.00 → **Double** last bet
+    - \$1.50–\$2.00 → **Triple**
+    - \$1.25–\$1.50 → **5×**
 
-    All logic is applied exactly as per your model.
+    After **2 consecutive wins** → **Pause betting** until a loss.
+
+    First bet uses **1% of bankroll**.
+
+    All updates are dynamic and responsive.
     """)
