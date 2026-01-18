@@ -2,16 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- THEME & SESSION STATE INIT ---
-if 'theme' not in st.session_state:
-    st.session_state.theme = 'light'
-
-def toggle_theme():
-    st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
-
-st.set_page_config(page_title="Datura Dog Racing Model", layout="wide")
-
-# Initialize session state
+# --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
@@ -19,11 +10,19 @@ if 'bankroll' not in st.session_state:
     st.session_state.last_bet_amount = 0.0
     st.session_state.race_history = []
     st.session_state.current_race_index = 0
-    st.session_state.current_odds = 1.67
+    st.session_state.current_odds = 1.80
     st.session_state.mode = None  # 'race_day' or 'perpetual'
-    st.session_state.betting_paused = False  # Only used in Race Day
 
-# Sidebar
+# --- THEME TOGGLE ---
+if 'theme' not in st.session_state:
+    st.session_state.theme = 'light'
+
+def toggle_theme():
+    st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
+
+st.set_page_config(page_title="Datura Companion", layout="wide")
+
+# --- SIDEBAR SETTINGS ---
 with st.sidebar:
     st.header("⚙️ Settings")
     new_bankroll = st.number_input(
@@ -46,7 +45,7 @@ with st.sidebar:
         format="%.1f%%"
     ) / 100.0
 
-    win_rate_base = st.slider("Win Rate (Assumed)", 0.01, 1.00, 0.60, format="%.2f")
+    win_rate_base = st.slider("Expected Win Rate (Favourite)", 0.01, 1.00, 0.60, format="%.2f")
 
     if st.button("🌓 Toggle Theme"):
         toggle_theme()
@@ -55,7 +54,7 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- TODAY'S RACES ---
+# --- TODAY'S RACES (Example) ---
 race_day_races = [
     "Flemington • Race 4 - 14. Yes I Know (2)",
     "Flemington • Race 5 - 6. Celerity (4)",
@@ -70,9 +69,9 @@ race_day_races = [
 ]
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Dog Racing Model")
+st.title("🐕 Datura Companion v1.1")
 
-# Top Metrics
+# Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
 col1, col2, col3 = st.columns(3)
 col1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
@@ -88,7 +87,6 @@ if mode_col1.button("🎯 Start Race Day", use_container_width=True):
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
-    st.session_state.betting_paused = False
     st.rerun()
 
 if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
@@ -96,14 +94,13 @@ if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
-    st.session_state.betting_paused = False
     st.rerun()
 
 # --- DISPLAY MODE ---
 if st.session_state.mode == 'race_day':
-    st.info("🏁 Race Day Mode: Pause betting after 2 wins in a row until a loss occurs")
+    st.info("🏁 Race Day Mode: Pause after 2 wins until a loss occurs")
 elif st.session_state.mode == 'perpetual':
-    st.info("🌀 Perpetual Mode: No pause — after win, reset to 1% of current bankroll")
+    st.info("🌀 Perpetual Mode: Reset stake after win. No pause.")
 else:
     st.info("Select a mode to begin.")
     st.stop()
@@ -117,7 +114,6 @@ if st.session_state.mode == 'race_day':
 else:
     race_str = f"Perpetual Race #{st.session_state.current_race_index + 1}"
 
-# Parse race
 try:
     if st.session_state.mode == 'race_day':
         track_race_part = race_str.split("-")[0].strip()
@@ -136,9 +132,9 @@ st.subheader("Current Race")
 st.markdown(f"**{full_race_label}**")
 
 # --- ODDS INPUT ---
-st.subheader("Enter Bookmaker Odds")
+st.subheader("Enter Favourite Odds")
 odds_input = st.number_input(
-    "Odds",
+    "Favourite Odds",
     min_value=1.01,
     value=st.session_state.current_odds,
     step=0.01,
@@ -147,43 +143,45 @@ odds_input = st.number_input(
 )
 st.session_state.current_odds = odds_input
 
-# --- LIVE ODDS THRESHOLD GUIDE (Only in Perpetual Mode) ---
+# --- ODDS DIFFERENTIAL GUIDE (Only in Perpetual Run) ---
 if st.session_state.mode == 'perpetual':
-    required_odds_40 = 1.40 / win_rate_base
-    required_odds_45 = 1.45 / win_rate_base
-    required_odds_50 = 1.50 / win_rate_base
+    implied_prob = 1 / st.session_state.current_odds
+    expected_win_rate = win_rate_base
+
+    # Calculate required second-favourite odds for given uplift
+    uplift_40 = st.session_state.current_odds * 1.40
+    uplift_45 = st.session_state.current_odds * 1.45
+    uplift_50 = st.session_state.current_odds * 1.50
 
     st.info(f"""
-    🔍 **Odds Threshold Guide (Live Update)**
-    - For **+40% edge**: Need odds ≥ {required_odds_40:.2f}
-    - For **+45% edge**: Need odds ≥ {required_odds_45:.2f}
-    - For **+50%+ edge**: Need odds ≥ {required_odds_50:.2f}
-    
-    🎯 Your entered odds: {st.session_state.current_odds:.2f}
+    🔍 **Odds Differential Guide (vs Favourite: {st.session_state.current_odds:.2f})**
+    - **+40% longer odds**: {uplift_40:.2f}
+    - **+45% longer odds**: {uplift_45:.2f}
+    - **+50% longer odds**: {uplift_50:.2f}
+
+    🎯 If the actual second favourite is **above these thresholds**, the market sees a **clear favorite** → stronger signal for **favourite play**.
     """, icon="📊")
 
 # --- DATORA EDGE ---
 datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
 datura_edge_percent = datura_edge_decimal * 100
-implied_prob = (1 / st.session_state.current_odds) * 100
+implied_prob_percent = (1 / st.session_state.current_odds) * 100
 
-# --- RECOMMENDED STAKE ---
+# --- STAKE LOGIC ---
 betting_allowed = True
-
 if st.session_state.mode == 'race_day' and st.session_state.consecutive_wins >= 2:
     betting_allowed = False
     st.warning("⏸️ 2 wins in a row. Betting paused until a loss occurs.")
 
 if not betting_allowed:
     recommended_stake = 0.0
+    st.info("No bet recommended (awaiting loss after 2 wins).")
 else:
-    # Always reset to 1% of current bankroll after win
     if st.session_state.consecutive_wins > 0:
         recommended_stake = st.session_state.bankroll * base_stake_pct
     elif st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * base_stake_pct
     else:
-        # After loss: escalate based on last losing stake and odds
         if st.session_state.current_odds > 2.00:
             recommended_stake = st.session_state.last_bet_amount * 2
         elif 1.50 < st.session_state.current_odds <= 2.00:
@@ -193,18 +191,14 @@ else:
         else:
             recommended_stake = st.session_state.bankroll * base_stake_pct
 
-    recommended_stake = min(recommended_stake, st.session_state.bankroll)
+    recommended_stake = min(recommended_stake, st.session_state.bankroll * 0.05)  # Max 5%
+    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
 
 # --- DISPLAY OUTPUT ---
-st.markdown(f"**Implied Prob:** {implied_prob:.2f}%")
-st.markdown(f"**Win Rate Assumed:** {win_rate_base:.2%}")
+st.markdown(f"**Implied Prob:** {implied_prob_percent:.2f}%")
+st.markdown(f"**Expected Win Rate:** {win_rate_base:.2%}")
 edge_color = "green" if datura_edge_decimal > 0 else "red"
 st.markdown(f"### **Datura Edge:** :{edge_color}[{datura_edge_percent:+.2f}%]")
-
-if recommended_stake > 0:
-    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
-else:
-    st.info("No bet recommended (awaiting loss after 2 wins).")
 
 # --- WIN/LOSS BUTTONS ---
 st.divider()
@@ -220,9 +214,8 @@ def log_and_advance(result: str, profit: float):
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
     st.session_state.current_race_index += 1
-    st.session_state.current_odds = 1.67  # Reset default
+    st.session_state.current_odds = 1.80  # Reset default
 
-# WIN Button
 if col_win.button("✅ WIN", use_container_width=True):
     if not betting_allowed:
         st.warning("Cannot place bet — 2 wins already recorded.")
@@ -234,12 +227,9 @@ if col_win.button("✅ WIN", use_container_width=True):
         log_and_advance("WIN", profit)
         st.rerun()
 
-# LOSS Button
 if col_loss.button("❌ LOSS", use_container_width=True):
     st.session_state.bankroll -= recommended_stake
     st.session_state.consecutive_wins = 0
-    if not betting_allowed:
-        st.session_state.betting_paused = False  # Reset pause after loss
     st.session_state.last_bet_amount = recommended_stake if recommended_stake > 0 else st.session_state.bankroll * base_stake_pct
     log_and_advance("LOSS", -recommended_stake)
     st.rerun()
@@ -254,25 +244,15 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Edge**
-    - **Formula**: `(Win Rate × Odds) - 1`
-    - Positive if > 0 → +EV bet
+    ### **Datura Companion v1.1**
+    - **Only bet on favourites** — no underdogs, no overlays
+    - **Expected Win Rates**:
+      - **NRL/AFL Favourites**: 65%
+      - **Horses/Dogs (Start-of-Day Favourite)**: 60%
+    - **Edge = (Expected Win Rate × Odds) - 1**
+    - **Odds Differential**: Large gap between favourite and second favourite → market confidence → stronger signal
+    - **Staking**: Dynamic, based on win/loss streak and odds
+    - **Risk Control**: Max 5% of bankroll per bet
 
-    ### **Odds Threshold Guide (Perpetual Mode)**
-    - Updates **live** as you enter odds
-    - Shows minimum odds needed for:
-      - +40%, +45%, +50% edge
-    - Helps identify value quickly
-
-    ### **Mode Differences**
-    | Feature | Perpetual Run | Race Day Event |
-    |--------|---------------|----------------|
-    | **Multiple Wins Allowed?** | ✅ Yes | ✅ Yes |
-    | **Pause After 2 Wins?** | ❌ No | ✅ Yes |
-    | **Resume After Loss?** | N/A | ✅ Yes |
-    | **Stake After Win** | Reset to 1% × current bankroll | Reset to 1% × current bankroll |
-    | **Stake After Loss** | Escalate based on last stake | Escalate based on last stake |
-    | **Threshold Display** | ✅ Live | ❌ Hidden |
-
-    P&L correctly tracks: `Current Bankroll - Initial Bankroll`
+    **No form analysis. No insider knowledge. Just market structure.**
     """)
