@@ -21,12 +21,11 @@ if 'bankroll' not in st.session_state:
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.67
     st.session_state.mode = None  # 'race_day' or 'perpetual'
+    st.session_state.betting_paused = False  # Only used in Race Day
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
-    if 'temp_bankroll' not in st.session_state:
-        st.session_state.temp_bankroll = 1000.0
     new_bankroll = st.number_input(
         "Starting Bankroll (\$)",
         min_value=10.0,
@@ -89,6 +88,7 @@ if mode_col1.button("🎯 Start Race Day", use_container_width=True):
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
+    st.session_state.betting_paused = False
     st.rerun()
 
 if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
@@ -96,13 +96,14 @@ if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
+    st.session_state.betting_paused = False
     st.rerun()
 
 # --- DISPLAY MODE ---
 if st.session_state.mode == 'race_day':
-    st.info("🏁 Race Day Mode: Automatic race progression")
+    st.info("🏁 Race Day Mode: Pause betting after 2 wins in a row until a loss occurs")
 elif st.session_state.mode == 'perpetual':
-    st.info("🌀 Perpetual Mode: Continuous cycle, resets after 2 wins")
+    st.info("🌀 Perpetual Mode: No pause — after win, reset to 1% of current bankroll")
 else:
     st.info("Select a mode to begin.")
     st.stop()
@@ -117,19 +118,19 @@ else:
     race_str = f"Perpetual Race #{st.session_state.current_race_index + 1}"
 
 # Parse race
-if st.session_state.mode == 'race_day':
-    try:
+try:
+    if st.session_state.mode == 'race_day':
         track_race_part = race_str.split("-")[0].strip()
         horse_part = "-".join(race_str.split("-")[1:]).strip()
         barrier = horse_part.split("(")[-1].strip(")")
         horse_name = horse_part.split(f"({barrier})")[0].strip()
         full_race_label = f"{track_race_part} - {horse_name} (Barrier {barrier})"
-    except:
+    else:
         full_race_label = race_str
-        barrier = "Unknown"
-else:
+        barrier = "N/A"
+except:
     full_race_label = race_str
-    barrier = "N/A"
+    barrier = "Unknown"
 
 st.subheader("Current Race")
 st.markdown(f"**{full_race_label}**")
@@ -142,40 +143,47 @@ odds_input = st.number_input(
     value=st.session_state.current_odds,
     step=0.01,
     format="%.2f",
-    key="odds_input"
+    key="odds_input_live"
 )
 st.session_state.current_odds = odds_input
 
-# --- DISPLAY ODDS THRESHOLDS (ONLY IN PERPETUAL MODE) ---
+# --- LIVE ODDS THRESHOLD GUIDE (Only in Perpetual Mode) ---
 if st.session_state.mode == 'perpetual':
     required_odds_40 = 1.40 / win_rate_base
     required_odds_45 = 1.45 / win_rate_base
     required_odds_50 = 1.50 / win_rate_base
 
     st.info(f"""
-    🔍 **Odds Threshold Guide (Perpetual Run)**
+    🔍 **Odds Threshold Guide (Live Update)**
     - For **+40% edge**: Need odds ≥ {required_odds_40:.2f}
     - For **+45% edge**: Need odds ≥ {required_odds_45:.2f}
     - For **+50%+ edge**: Need odds ≥ {required_odds_50:.2f}
+    
+    🎯 Your entered odds: {st.session_state.current_odds:.2f}
     """, icon="📊")
 
 # --- DATORA EDGE ---
 datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
 datura_edge_percent = datura_edge_decimal * 100
-
-# Implied probability
 implied_prob = (1 / st.session_state.current_odds) * 100
 
 # --- RECOMMENDED STAKE ---
-if st.session_state.consecutive_wins >= 2:
+betting_allowed = True
+
+if st.session_state.mode == 'race_day' and st.session_state.consecutive_wins >= 2:
+    betting_allowed = False
+    st.warning("⏸️ 2 wins in a row. Betting paused until a loss occurs.")
+
+if not betting_allowed:
     recommended_stake = 0.0
-    st.warning("⏸️ 2 Wins in a row. Paused betting until a loss occurs.")
 else:
+    # Always reset to 1% of current bankroll after win
     if st.session_state.consecutive_wins > 0:
         recommended_stake = st.session_state.bankroll * base_stake_pct
     elif st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * base_stake_pct
     else:
+        # After loss: escalate based on last losing stake and odds
         if st.session_state.current_odds > 2.00:
             recommended_stake = st.session_state.last_bet_amount * 2
         elif 1.50 < st.session_state.current_odds <= 2.00:
@@ -196,7 +204,7 @@ st.markdown(f"### **Datura Edge:** :{edge_color}[{datura_edge_percent:+.2f}%]")
 if recommended_stake > 0:
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
 else:
-    st.info("No bet recommended (2-win pause).")
+    st.info("No bet recommended (awaiting loss after 2 wins).")
 
 # --- WIN/LOSS BUTTONS ---
 st.divider()
@@ -212,23 +220,27 @@ def log_and_advance(result: str, profit: float):
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
     st.session_state.current_race_index += 1
-    st.session_state.current_odds = 1.67
+    st.session_state.current_odds = 1.67  # Reset default
 
+# WIN Button
 if col_win.button("✅ WIN", use_container_width=True):
-    if st.session_state.consecutive_wins < 2:
+    if not betting_allowed:
+        st.warning("Cannot place bet — 2 wins already recorded.")
+    else:
         profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
         st.session_state.bankroll += profit
         st.session_state.consecutive_wins += 1
         st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
         log_and_advance("WIN", profit)
         st.rerun()
-    else:
-        st.warning("Already at 2 wins. No bet placed.")
 
+# LOSS Button
 if col_loss.button("❌ LOSS", use_container_width=True):
     st.session_state.bankroll -= recommended_stake
     st.session_state.consecutive_wins = 0
-    st.session_state.last_bet_amount = recommended_stake
+    if not betting_allowed:
+        st.session_state.betting_paused = False  # Reset pause after loss
+    st.session_state.last_bet_amount = recommended_stake if recommended_stake > 0 else st.session_state.bankroll * base_stake_pct
     log_and_advance("LOSS", -recommended_stake)
     st.rerun()
 
@@ -247,18 +259,20 @@ with st.expander("ℹ️ Logic & Rules"):
     - Positive if > 0 → +EV bet
 
     ### **Odds Threshold Guide (Perpetual Mode)**
-    - Shows minimum odds needed for key edge levels:
-      - +40%, +45%, +50% based on your win rate
-    - Helps identify value opportunities quickly
+    - Updates **live** as you enter odds
+    - Shows minimum odds needed for:
+      - +40%, +45%, +50% edge
+    - Helps identify value quickly
 
-    ### **Stake Rules**
-    - **Base Stake**: Adjustable % of current bankroll (default 1%)
-    - **After WIN**: Reset to base % of *current* bankroll
-    - **After LOSS**: Multiply last losing stake
-      - > \$2.00 → 2×
-      - \$1.50–\$2.00 → 3×
-      - \$1.25–\$1.50 → 5×
-    - **After 2 Wins**: Pause → next bet resets after loss
+    ### **Mode Differences**
+    | Feature | Perpetual Run | Race Day Event |
+    |--------|---------------|----------------|
+    | **Multiple Wins Allowed?** | ✅ Yes | ✅ Yes |
+    | **Pause After 2 Wins?** | ❌ No | ✅ Yes |
+    | **Resume After Loss?** | N/A | ✅ Yes |
+    | **Stake After Win** | Reset to 1% × current bankroll | Reset to 1% × current bankroll |
+    | **Stake After Loss** | Escalate based on last stake | Escalate based on last stake |
+    | **Threshold Display** | ✅ Live | ❌ Hidden |
 
     P&L correctly tracks: `Current Bankroll - Initial Bankroll`
     """)
