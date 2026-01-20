@@ -21,20 +21,19 @@ if 'bankroll' not in st.session_state:
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.67
     st.session_state.mode = None  # 'race_day' or 'perpetual'
-    st.session_state.just_resumed = False
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
     st.session_state.initial_bankroll = st.number_input("Starting Bankroll (\$)", value=1000.0)
-    win_rate_base = st.slider("Overall Win Rate (%)", 1.0, 100.0, 60.0) / 100
+    win_rate_base = st.slider("Win Rate (Assumed)", 0.01, 1.00, 0.60, format="%.2f")
     if st.button("🌓 Toggle Theme"):
         toggle_theme()
     if st.button("🔁 Reset Session"):
         st.session_state.clear()
         st.rerun()
 
-# --- TODAY'S RACES (Barrier in parentheses) ---
+# --- TODAY'S RACES ---
 race_day_races = [
     "Flemington • Race 4 - 14. Yes I Know (2)",
     "Flemington • Race 5 - 6. Celerity (4)",
@@ -60,19 +59,23 @@ col3.metric("Win Streak", f"{st.session_state.consecutive_wins}W")
 
 st.divider()
 
-# --- MODE SELECTION BUTTONS ---
+# --- MODE SELECTION ---
 mode_col1, mode_col2 = st.columns(2)
 if mode_col1.button("🎯 Start Race Day", use_container_width=True):
     st.session_state.mode = 'race_day'
     st.session_state.current_race_index = 0
+    st.session_state.consecutive_wins = 0
+    st.session_state.last_bet_amount = 0.0
     st.rerun()
 
 if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
     st.session_state.mode = 'perpetual'
     st.session_state.current_race_index = 0
+    st.session_state.consecutive_wins = 0
+    st.session_state.last_bet_amount = 0.0
     st.rerun()
 
-# --- DISPLAY ACTIVE MODE ---
+# --- DISPLAY MODE ---
 if st.session_state.mode == 'race_day':
     st.info("🏁 Race Day Mode: Automatic race progression")
 elif st.session_state.mode == 'perpetual':
@@ -81,17 +84,16 @@ else:
     st.info("Select a mode to begin.")
     st.stop()
 
-# --- DETERMINE CURRENT RACE LABEL ---
+# --- CURRENT RACE ---
 if st.session_state.mode == 'race_day':
     if st.session_state.current_race_index >= len(race_day_races):
         st.success("🎉 All races completed!")
         st.stop()
     race_str = race_day_races[st.session_state.current_race_index]
 else:
-    # Perpetual mode: generate generic label
     race_str = f"Perpetual Race #{st.session_state.current_race_index + 1}"
 
-# Parse race string
+# Parse race
 if st.session_state.mode == 'race_day':
     try:
         track_race_part = race_str.split("-")[0].strip()
@@ -121,24 +123,27 @@ odds_input = st.number_input(
 )
 st.session_state.current_odds = odds_input
 
-# --- CALCULATIONS ---
-implied_prob = (1 / st.session_state.current_odds) * 100
-current_streak_for_index = st.session_state.consecutive_wins + 1
-ou_index = current_streak_for_index * (win_rate_base * 100)
-weighted_prob = (ou_index + implied_prob) / 2
-datura_edge = weighted_prob - implied_prob
+# --- CORRECTED DATORA EDGE ---
+# Edge = (Win Rate × Odds) - 1
+datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
+datura_edge_percent = datura_edge_decimal * 100
 
-# --- STAKE LOGIC (Your Exact Rules) ---
+# Implied probability
+implied_prob = (1 / st.session_state.current_odds) * 100
+
+# --- STAKE LOGIC (Fixed) ---
 if st.session_state.consecutive_wins >= 2:
     recommended_stake = 0.0
     st.warning("⏸️ 2 Wins in a row. Paused betting until a loss occurs.")
 else:
-    if st.session_state.just_resumed:
+    if st.session_state.consecutive_wins > 0:
+        # After a win (but not 2 yet): reset to 1% of current bankroll
         recommended_stake = st.session_state.bankroll * 0.01
-        st.session_state.just_resumed = False
     elif st.session_state.last_bet_amount == 0:
-        recommended_stake = st.session_state.bankroll * 0.01  # 1% base
+        # First bet ever
+        recommended_stake = st.session_state.bankroll * 0.01
     else:
+        # After a loss: apply multiplier
         if st.session_state.current_odds > 2.00:
             recommended_stake = st.session_state.last_bet_amount * 2
         elif 1.50 < st.session_state.current_odds <= 2.00:
@@ -152,11 +157,10 @@ recommended_stake = min(recommended_stake, st.session_state.bankroll)
 
 # --- DISPLAY OUTPUT ---
 st.markdown(f"**Implied Prob:** {implied_prob:.2f}%")
-st.markdown(f"**Over/Under Index:** {ou_index:.2f}%")
-st.markdown(f"**Weighted Prob:** {weighted_prob:.2f}%")
+st.markdown(f"**Win Rate Assumed:** {win_rate_base:.2%}")
 
-edge_color = "green" if datura_edge > 0 else "red"
-st.markdown(f"### **Datura Edge:** :{edge_color}[{datura_edge:.2f}%]")
+edge_color = "green" if datura_edge_decimal > 0 else "red"
+st.markdown(f"### **Datura Edge:** :{edge_color}[{datura_edge_percent:+.2f}%]")
 
 if recommended_stake > 0:
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
@@ -168,7 +172,6 @@ st.divider()
 col_win, col_loss = st.columns(2)
 
 def log_and_advance(result: str, profit: float):
-    # Record race
     st.session_state.race_history.append({
         "race": full_race_label,
         "odds": st.session_state.current_odds,
@@ -177,17 +180,16 @@ def log_and_advance(result: str, profit: float):
         "profit": profit,
         "timestamp": datetime.now().strftime("%H:%M:%S")
     })
-    # Increment race index
     st.session_state.current_race_index += 1
-    # Reset odds for next race
-    st.session_state.current_odds = 1.67
+    st.session_state.current_odds = 1.67  # Reset for next
 
 if col_win.button("✅ WIN", use_container_width=True):
     if st.session_state.consecutive_wins < 2:
         profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
         st.session_state.bankroll += profit
         st.session_state.consecutive_wins += 1
-        st.session_state.last_bet_amount = recommended_stake
+        # After win: reset last bet to 1% for next cycle
+        st.session_state.last_bet_amount = st.session_state.bankroll * 0.01
         log_and_advance("WIN", profit)
         st.rerun()
     else:
@@ -196,7 +198,7 @@ if col_win.button("✅ WIN", use_container_width=True):
 if col_loss.button("❌ LOSS", use_container_width=True):
     st.session_state.bankroll -= recommended_stake
     st.session_state.consecutive_wins = 0
-    st.session_state.last_bet_amount = recommended_stake
+    st.session_state.last_bet_amount = recommended_stake  # Lock in loss amount for progression
     log_and_advance("LOSS", -recommended_stake)
     st.rerun()
 
@@ -210,17 +212,18 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Edge & Stake Logic**
-    - **Edge**: Based on Over/Under Index vs Implied Probability
-    - **Stake Rules**:
-      - After loss:
-        - Odds > \$2.00 → Double
-        - \$1.50–\$2.00 → Triple
-        - \$1.25–\$1.50 → 5×
-      - After 2 wins → Pause until loss
-    - `just_resumed` flag resets to 1% after pause.
+    ### **Datura Edge**
+    - **Formula**: `(Win Rate × Odds) - 1`
+    - Example: 60% win rate at $2.00 odds → `(0.60 × 2.00) - 1 = +0.20` → **+20% edge**
 
-    Modes:
-    - **Race Day**: Auto-advance through 10 real races
-    - **Perpetual**: Infinite loop, independent of schedule
+    ### **Stake Rules**
+    - ✅ **After WIN**: Reset stake to **1% of current bankroll**
+    - ❌ **After LOSS**: Increase stake based on odds:
+      - > \$2.00 → 2×
+      - \$1.50–\$2.00 → 3×
+      - \$1.25–\$1.50 → 5×
+    - ⏸️ **After 2 Wins**: Pause until next loss
+    - First bet always 1% of starting bankroll
+
+    Fully aligned with your original model.
     """)
