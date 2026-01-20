@@ -1,78 +1,146 @@
 import streamlit as st
+import random
+import time
 
-# Initialize session state variables if not already present
-if 'base_stake_pct' not in st.session_state:
-    st.session_state.base_stake_pct = 1.0 / 100.0  # Default 1%
-
+# --- Session State Initialization ---
 if 'bankroll' not in st.session_state:
-    st.session_state.bankroll = 10000.0  # Default \$10,000
+    st.session_state.bankroll = 10000.0
+if 'base_stake' not in st.session_state:
+    st.session_state.base_stake = 100.0
+if 'loss_streak' not in st.session_state:
+    st.session_state.loss_streak = 0
+if 'race_count' not in st.session_state:
+    st.session_state.race_count = 0
+if 'betting_active' not in st.session_state:
+    st.session_state.betting_active = True
+if 'last_result' not in st.session_state:
+    st.session_state.last_result = None
+if 'just_resumed' not in st.session_state:
+    st.session_state.just_resumed = False
 
-# App title
-st.title("🏈 Sports Betting Model Interface")
+# --- App Title ---
+st.title("🏁 Daily Racing & Betting Simulator")
 
-# Bankroll input
-st.session_state.bankroll = st.number_input(
-    "Bankroll (\$)",
-    min_value=100.0,
-    max_value=1_000_000.0,
-    value=st.session_state.bankroll,
-    step=100.0,
-    format="%.2f"
+# --- Configuration Panel ---
+st.sidebar.header("🔧 Configuration")
+st.session_state.bankroll = st.sidebar.number_input(
+    "Bankroll (\$)", 100.0, 1_000_000.0, st.session_state.bankroll, 100.0
+)
+st.session_state.base_stake = st.sidebar.number_input(
+    "Base Stake (\$)", 10.0, 1000.0, st.session_state.base_stake, 10.0
 )
 
-# Base stake percentage slider - FIXED VERSION
-st.session_state.base_stake_pct = st.slider(
-    "Base Stake %",
-    min_value=0.5,
-    max_value=5.0,
-    value=1.0,
-    step=0.5,
-    format="%.1f%%"
-) / 100.0
+# Expected win rate and odds input
+user_win_rate = st.sidebar.slider("Expected Win Rate (%)", 1, 99, 55) / 100.0
+market_odds = st.sidebar.slider("Market Odds (Decimal)", 1.5, 10.0, 2.0, 0.1)
 
-# Display current settings
-st.write("### 🔍 Current Settings")
-st.write(f"- **Bankroll**: \${st.session_state.bankroll:,.2f}")
-st.write(f"- **Base Stake**: {st.session_state.base_stake_pct * 100:.1f}% of bankroll")
-st.write(f"- **Stake Amount**: \${st.session_state.bankroll * st.session_state.base_stake_pct:,.2f}")
+# Implied probability
+implied_prob = 1 / market_odds
 
-# Example: Input for user probability and odds
-st.write("### 📊 Bet Input")
-col1, col2 = st.columns(2)
-with col1:
-    user_prob = st.number_input("Your Win Probability (%)", 1.0, 99.0, 60.0, 0.5) / 100.0
-with col2:
-    odds = st.number_input("Market Odds (Decimal)", 1.01, 100.0, 2.0, 0.01)
-
-# Implied probability from decimal odds
-implied_prob = 1 / odds
-
-# Expected Value calculation
-ev = user_prob - implied_prob
-
-# Stake sizing (example: kelly fraction)
-kelly_fraction = 0.5  # Half-Kelly
-kelly_stake = max(0, (user_prob - (1 - user_prob) / (odds - 1))) * kelly_fraction
-unit_stake = st.session_state.bankroll * st.session_state.base_stake_pct
-final_stake = min(unit_stake * (kelly_stake / 0.1), st.session_state.bankroll * 0.1)  # Cap max risk
-
-# Decision logic
-if ev > 0.01:
-    decision = "✅ BET"
-    color = "green"
+# Edge calculation
+if st.session_state.loss_streak > 0:
+    adjusted_edge = (user_win_rate * 1.1) - implied_prob  # Slight boost after losses
 else:
-    decision = "❌ NO BET"
-    color = "red"
+    adjusted_edge = user_win_rate - implied_prob
 
-# Results output
-st.write("### 📈 Evaluation")
-st.markdown(f"<h3 style='color:{color};'>{decision}</h3>", unsafe_allow_html=True)
-st.write(f"- **Your Edge**: {ev * 100:+.2f}%")
-st.write(f"- **Implied Probability**: {implied_prob * 100:.1f}%")
-st.write(f"- **Expected Profit**: {ev * final_stake * 100:.2f}% of stake")
-st.write(f"- **Recommended Stake**: \${final_stake:,.2f}")
+edge_pct = adjusted_edge * 100
 
-# Kelly info
-st.write("### ℹ️ Notes")
-st.write("- Uses half-Kelly staking with base unit scaling")
-st.write("- Positive EV threshold: >1% edge")
+# --- Display Metrics ---
+st.write("### 💰 Current Status")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
+col2.metric("Base Stake", f"\${st.session_state.base_stake:,.2f}")
+col3.metric("Loss Streak", st.session_state.loss_streak)
+col4.metric("Edge", f"{edge_pct:+.2f}%")
+
+# --- Stake Calculation Logic ---
+def calculate_stake():
+    if st.session_state.just_resumed:
+        stake = st.session_state.base_stake
+        st.session_state.just_resumed = False
+        return stake
+
+    multiplier = 2 ** st.session_state.loss_streak
+    return st.session_state.base_stake * multiplier
+
+current_stake = calculate_stake()
+
+# --- Race Simulation ---
+st.write("### 🏁 Race Day")
+st.write(f"Race #{st.session_state.race_count + 1}: Ready to run")
+
+# Win probability with edge
+win_prob = user_win_rate * 1.05  # Model edge
+outcome = random.random() < win_prob
+
+# --- Bet Action Buttons (Always Visible) ---
+st.write("### 🎯 Result")
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    if st.button("✅ Win", key="win_btn", use_container_width=True):
+        st.session_state.last_result = "win"
+        st.session_state.loss_streak = 0
+        profit = current_stake * (market_odds - 1)
+        st.session_state.bankroll += profit
+        st.session_state.race_count += 1
+        st.session_state.betting_active = True
+        st.rerun()
+
+with col2:
+    if st.button("❌ Loss", key="loss_btn", use_container_width=True):
+        st.session_state.last_result = "loss"
+        st.session_state.loss_streak += 1
+        if current_stake <= st.session_state.bankroll:
+            st.session_state.bankroll -= current_stake
+        else:
+            # Stake exceeds bankroll
+            if st.session_state.bankroll > 0:
+                # Allow user to choose
+                st.warning(f"⚠️ Required stake (\${current_stake:.2f}) exceeds bankroll (\${st.session_state.bankroll:.2f}).")
+                col_a, col_b = st.columns(2)
+                if col_a.button("🔻 Stake Remaining", key="partial_stake"):
+                    st.session_state.bankroll = 0
+                    st.session_state.race_count += 1
+                    st.session_state.betting_active = True
+                    st.rerun()
+                if col_b.button("🔄 Reset Stake", key="reset_stake"):
+                    st.session_state.loss_streak = 0
+                    st.session_state.race_count += 1
+                    st.session_state.betting_active = True
+                    st.session_state.just_resumed = True
+                    st.rerun()
+            else:
+                st.error("Bankroll depleted. Reset manually.")
+        else:
+            st.session_state.race_count += 1
+            st.session_state.betting_active = True
+            st.rerun()
+
+# --- Display Recommended Stake ---
+st.write("### 📊 Bet Details")
+st.write(f"- **Model Edge**: {edge_pct:+.2f}%")
+st.write(f"- **Current Stake**: \${current_stake:,.2f}")
+if current_stake > st.session_state.bankroll and st.session_state.bankroll > 0:
+    st.warning(f"⚠️ Stake exceeds bankroll. Next action required: stake remaining or reset.")
+elif st.session_state.bankroll == 0:
+    st.info("Bankroll exhausted. Use 'Reset Stake' to continue with base stake.")
+
+# --- Reset Controls ---
+st.write("### 🔁 Manual Controls")
+if st.button("🔁 Reset Loss Streak"):
+    st.session_state.loss_streak = 0
+    st.session_state.just_resumed = True
+    st.success("Loss streak reset. Next stake = base")
+    st.rerun()
+
+if st.button("🔄 Reset All"):
+    for key in ['bankroll', 'base_stake', 'loss_streak', 'race_count', 'last_result', 'betting_active', 'just_resumed']:
+        if key == 'bankroll':
+            st.session_state[key] = 10000.0
+        elif key == 'base_stake':
+            st.session_state[key] = 100.0
+        else:
+            st.session_state[key] = 0
+    st.success("All settings reset to default")
+    st.rerun()
