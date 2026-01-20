@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import time
 
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
@@ -11,7 +12,9 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.80
-    st.session_state.mode = None  # 'race_day' or 'perpetual'
+    st.session_state.mode = None
+    st.session_state.auto_running = False
+    st.session_state.speed = 1.0  # 1.0 = normal, 2.0 = fast, 0.5 = slow
 
 # --- THEME TOGGLE ---
 if 'theme' not in st.session_state:
@@ -47,6 +50,14 @@ with st.sidebar:
 
     win_rate_base = st.slider("Expected Win Rate (Favourite)", 0.01, 1.00, 0.60, format="%.2f")
 
+    # Auto Run Speed
+    st.session_state.speed = st.select_slider(
+        "Auto Run Speed",
+        options=[0.5, 1.0, 2.0, 5.0],
+        format_func=lambda x: "Slow" if x == 0.5 else "Normal" if x == 1.0 else "Fast" if x == 2.0 else "Max",
+        value=1.0
+    )
+
     if st.button("🌓 Toggle Theme"):
         toggle_theme()
 
@@ -69,7 +80,7 @@ race_day_races = [
 ]
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.1")
+st.title("🐕 Datura Companion v1.2")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -81,12 +92,13 @@ col3.metric("Win Streak", f"{st.session_state.consecutive_wins}W")
 st.divider()
 
 # --- MODE SELECTION ---
-mode_col1, mode_col2 = st.columns(2)
+mode_col1, mode_col2, mode_col3 = st.columns(3)
 if mode_col1.button("🎯 Start Race Day", use_container_width=True):
     st.session_state.mode = 'race_day'
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
+    st.session_state.auto_running = False
     st.rerun()
 
 if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
@@ -94,7 +106,15 @@ if mode_col2.button("🔁 Start Perpetual Run", use_container_width=True):
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = 0.0
+    st.session_state.auto_running = False
     st.rerun()
+
+if mode_col3.button("▶️ Auto Run Simulation", use_container_width=True):
+    if not st.session_state.mode:
+        st.warning("Please select a mode first.")
+    else:
+        st.session_state.auto_running = True
+        st.rerun()
 
 # --- DISPLAY MODE STATUS ---
 if st.session_state.mode == 'race_day':
@@ -105,10 +125,24 @@ else:
     st.info("Select a mode to begin.")
     st.stop()
 
+# --- AUTO RUN CONTROL BAR ---
+if st.session_state.auto_running:
+    st.warning("▶️ Auto Run Active — Simulating...")
+    col_a, col_b = st.columns([1, 1])
+    if col_a.button("⏸️ Pause Auto Run"):
+        st.session_state.auto_running = False
+        st.rerun()
+    if col_b.button("⏹️ Stop & Reset"):
+        st.session_state.auto_running = False
+        st.session_state.mode = None
+        st.rerun()
+    st.divider()
+
 # --- CURRENT RACE ---
 if st.session_state.mode == 'race_day':
     if st.session_state.current_race_index >= len(race_day_races):
         st.success("🎉 All races completed!")
+        st.session_state.auto_running = False
         st.stop()
     race_str = race_day_races[st.session_state.current_race_index]
 else:
@@ -164,7 +198,7 @@ datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
 datura_edge_percent = datura_edge_decimal * 100
 implied_prob_percent = implied_prob * 100
 
-# --- STAKE LOGIC ---
+# --- STAKE LOGIC (NO 5% CAP) ---
 betting_allowed = True
 if st.session_state.mode == 'race_day' and st.session_state.consecutive_wins >= 2:
     betting_allowed = False
@@ -175,13 +209,10 @@ if not betting_allowed:
     st.info("No bet recommended (awaiting loss after 2 wins).")
 else:
     if st.session_state.consecutive_wins > 0:
-        # After a win: use base % of current bankroll
         recommended_stake = st.session_state.bankroll * base_stake_pct
     elif st.session_state.last_bet_amount == 0:
-        # First bet or reset
         recommended_stake = st.session_state.bankroll * base_stake_pct
     else:
-        # After a loss: increase based on odds
         if st.session_state.current_odds > 2.00:
             recommended_stake = st.session_state.last_bet_amount * 2
         elif 1.50 < st.session_state.current_odds <= 2.00:
@@ -191,12 +222,10 @@ else:
         else:
             recommended_stake = st.session_state.bankroll * base_stake_pct
 
-    # Cap at 5% of current bankroll
-    recommended_stake = min(recommended_stake, st.session_state.bankroll * 0.05)
-
-    # Clamp to available bankroll
+    # ✅ Removed 5% cap — stake can grow based on loss streak
+    # Clamp only to available bankroll
     if recommended_stake > st.session_state.bankroll:
-        st.warning(f"⚠️ Stake reduced to available bankroll: \${st.session_state.bankroll:,.2f}")
+        st.warning(f"⚠️ Stake exceeds bankroll. Reduced to \${st.session_state.bankroll:,.2f}")
         recommended_stake = st.session_state.bankroll
 
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
@@ -212,16 +241,19 @@ st.divider()
 col_win, col_loss = st.columns(2)
 
 def log_and_advance(result: str, profit: float):
+    timestamp = datetime.now().strftime("%H:%M:%S")
     st.session_state.race_history.append({
         "Race": full_race_label,
         "Odds": st.session_state.current_odds,
         "Stake": round(recommended_stake, 2),
         "Result": result,
         "Profit": round(profit, 2),
-        "Timestamp": datetime.now().strftime("%H:%M:%S")
+        "Bankroll": round(st.session_state.bankroll, 2),
+        "Timestamp": timestamp
     })
+
     st.session_state.current_race_index += 1
-    st.session_state.current_odds = 1.80  # Reset default
+    st.session_state.current_odds = 1.80
 
 if col_win.button("✅ WIN", use_container_width=True):
     if not betting_allowed:
@@ -241,6 +273,26 @@ if col_loss.button("❌ LOSS", use_container_width=True):
     log_and_advance("LOSS", -recommended_stake)
     st.rerun()
 
+# --- AUTO RUN LOOP ---
+if st.session_state.auto_running:
+    time.sleep(2.0 / st.session_state.speed)  # Adjustable delay
+    win_prob = 0.60  # Use win_rate_base or adjust per model
+    if random.random() < win_prob:
+        if col_win.button("Auto: WIN", key=f"auto_win_{int(time.time())}"):
+            profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
+            st.session_state.bankroll += profit
+            st.session_state.consecutive_wins += 1
+            st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
+            log_and_advance("WIN", profit)
+            st.rerun()
+    else:
+        if col_loss.button("Auto: LOSS", key=f"auto_loss_{int(time.time())}"):
+            st.session_state.bankroll -= recommended_stake
+            st.session_state.consecutive_wins = 0
+            st.session_state.last_bet_amount = recommended_stake
+            log_and_advance("LOSS", -recommended_stake)
+            st.rerun()
+
 # --- RACE HISTORY ---
 if st.session_state.race_history:
     st.divider()
@@ -248,18 +300,24 @@ if st.session_state.race_history:
     history_df = pd.DataFrame(st.session_state.race_history)
     st.dataframe(history_df, use_container_width=True, hide_index=True)
 
+    # --- PROFIT CHART ---
+    st.subheader("📈 Profit Chart")
+    chart_data = history_df[["Timestamp", "Bankroll"]].set_index("Timestamp")
+    st.line_chart(chart_data["Bankroll"])
+
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Companion v1.1**
+    ### **Datura Companion v1.2**
     - **Only bet on favourites** — no underdogs, no overlays
     - **Expected Win Rates**:
       - **NRL/AFL Favourites**: 65%
       - **Horses/Dogs (Start-of-Day Favourite)**: 60%
     - **Edge = (Expected Win Rate × Odds) - 1**
-    - **Odds Differential**: Large gap between favourite and second favourite → market confidence → stronger signal
-    - **Staking**: Dynamic, based on win/loss streak and odds
-    - **Risk Control**: Max 5% of bankroll per bet
+    - **Odds Differential**: Large gap → market confidence → stronger signal
+    - **Staking**: Dynamic, based on loss streak and odds — **no 5% cap**
+    - **Auto Run**: Simulate with configurable speed
+    - **Profit Chart**: Track bankroll over time
 
     **No form analysis. No insider knowledge. Just market structure.**
     """)
