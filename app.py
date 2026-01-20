@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Datura Intelligence", page_icon="🧠", layout="centered")
@@ -36,7 +35,17 @@ if 'bet_result' not in st.session_state:
 with st.sidebar:
     st.header("🎛️ Controls")
     st.session_state.mode = st.radio("Mode", ["race_day", "perpetual"], index=0)
-    st.session_state.base_stake_pct = st.slider("Base Stake %", 0.5, 5, 1, 1) / 100.0
+
+    # ✅ Fixed slider: all values are float, no type mismatch
+    st.session_state.base_stake_pct = st.slider(
+        "Base Stake %",
+        min_value=0.5,
+        max_value=5.0,
+        value=1.0,
+        step=0.5,
+        format="%.1f%%"
+    ) / 100.0
+
     st.session_state.max_consecutive_bets = st.number_input("Max Consecutive Bets", 1, 10, 5)
 
     if st.button("🔁 Reset All"):
@@ -134,7 +143,7 @@ if st.button("✅ Confirm Bet Result"):
                 profit = -stake
                 st.session_state.bankroll += profit
                 st.session_state.consecutive_wins = 0
-                st.session_state.last_bet_amount = stake  # Carry forward lost stake
+                st.session_state.last_bet_amount = stake  # Carry forward actual stake
 
             st.session_state.bets_since_reset += 1
 
@@ -155,7 +164,7 @@ if st.session_state.race_history:
     st.markdown("### 📜 Recent Bets")
     hist_df = pd.DataFrame(st.session_state.race_history)
     hist_df = hist_df[['timestamp', 'odds', 'stake', 'result', 'profit', 'bankroll_after']]
-    st.dataframe(hist_df.tail(10).round(2), use_container_width=True)
+    st.dataframe(hist_df.tail(10).round(2), width='stretch')  # ✅ Replaces use_container_width
 
 # --- DIAGNOSTIC LAYER ---
 def run_diagnostics():
