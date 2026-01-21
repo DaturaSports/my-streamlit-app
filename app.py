@@ -14,7 +14,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.current_odds = 1.80
     st.session_state.mode = None
     st.session_state.auto_running = False
-    st.session_state.speed = 1.0  # 1.0 = normal, 2.0 = fast, 0.5 = slow
+    st.session_state.speed = 1.0
 
 # --- THEME TOGGLE ---
 if 'theme' not in st.session_state:
@@ -80,7 +80,7 @@ race_day_races = [
 ]
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.2")
+st.title("🐕 Datura Companion v1.3")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -177,19 +177,31 @@ odds_input = st.number_input(
 )
 st.session_state.current_odds = odds_input
 
-# --- ODDS DIFFERENTIAL GUIDE (Only in Perpetual Run) ---
+# --- IMPLIED PROBABILITY DIFFERENTIAL GUIDE (Perpetual Mode Only) ---
 if st.session_state.mode == 'perpetual':
-    uplift_40 = st.session_state.current_odds * 1.40
-    uplift_45 = st.session_state.current_odds * 1.45
-    uplift_50 = st.session_state.current_odds * 1.50
+    imp_prob_fav = 1 / st.session_state.current_odds
+
+    # Target implied probabilities for second favourite
+    imp_prob_40 = imp_prob_fav * (1 - 0.40)  # 40% less likely
+    imp_prob_45 = imp_prob_fav * (1 - 0.45)
+    imp_prob_50 = imp_prob_fav * (1 - 0.50)
+
+    # Convert to decimal odds
+    odds_40 = round(1 / imp_prob_40, 2) if imp_prob_40 > 0 else 0
+    odds_45 = round(1 / imp_prob_45, 2) if imp_prob_45 > 0 else 0
+    odds_50 = round(1 / imp_prob_50, 2) if imp_prob_50 > 0 else 0
 
     st.info(f"""
-    🔍 **Odds Differential Guide (vs Favourite: {st.session_state.current_odds:.2f})**
-    - **+40% longer odds**: {uplift_40:.2f}
-    - **+45% longer odds**: {uplift_45:.2f}
-    - **+50% longer odds**: {uplift_50:.2f}
+    🔍 **Implied Probability Differential Guide**  
+    Based on favourite odds: **{st.session_state.current_odds:.2f}** → Implied Prob: **{imp_prob_fav:.1%}**
 
-    🎯 If the actual second favourite is **above these thresholds**, the market sees a **clear favorite** → stronger signal for **favourite play**.
+    For a **clear market favourite**, the second favourite should have:
+    - **40% lower probability** → Odds ≥ **{odds_40}**
+    - **45% lower probability** → Odds ≥ **{odds_45}**
+    - **50% lower probability** → Odds ≥ **{odds_50}**
+
+    🎯 Stronger signal when second favourite's odds meet or exceed these values.  
+    ✅ Minimum threshold: **40% differential** recommended.
     """, icon="📊")
 
 # --- DATORA EDGE ---
@@ -222,8 +234,6 @@ else:
         else:
             recommended_stake = st.session_state.bankroll * base_stake_pct
 
-    # ✅ Removed 5% cap — stake can grow based on loss streak
-    # Clamp only to available bankroll
     if recommended_stake > st.session_state.bankroll:
         st.warning(f"⚠️ Stake exceeds bankroll. Reduced to \${st.session_state.bankroll:,.2f}")
         recommended_stake = st.session_state.bankroll
@@ -275,8 +285,8 @@ if col_loss.button("❌ LOSS", use_container_width=True):
 
 # --- AUTO RUN LOOP ---
 if st.session_state.auto_running:
-    time.sleep(2.0 / st.session_state.speed)  # Adjustable delay
-    win_prob = 0.60  # Use win_rate_base or adjust per model
+    time.sleep(2.0 / st.session_state.speed)
+    win_prob = 0.60
     if random.random() < win_prob:
         if col_win.button("Auto: WIN", key=f"auto_win_{int(time.time())}"):
             profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
@@ -308,16 +318,17 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Companion v1.2**
+    ### **Datura Companion v1.3**
     - **Only bet on favourites** — no underdogs, no overlays
     - **Expected Win Rates**:
       - **NRL/AFL Favourites**: 65%
       - **Horses/Dogs (Start-of-Day Favourite)**: 60%
     - **Edge = (Expected Win Rate × Odds) - 1**
-    - **Odds Differential**: Large gap → market confidence → stronger signal
+    - **Implied Probability Differential**:  
+      Second favourite should be **40%–50% less likely** than favourite → strong market signal
     - **Staking**: Dynamic, based on loss streak and odds — **no 5% cap**
-    - **Auto Run**: Simulate with configurable speed
-    - **Profit Chart**: Track bankroll over time
+    - **Auto Run**: Simulate with speed control
+    - **Profit Chart**: Track bankroll evolution
 
     **No form analysis. No insider knowledge. Just market structure.**
     """)
