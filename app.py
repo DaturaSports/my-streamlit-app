@@ -99,7 +99,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.6")
+st.title("🐕 Datura Companion v1.7")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -139,7 +139,7 @@ if mode_col3.button("▶️ Auto Run Simulation", use_container_width=True):
 if st.session_state.mode == 'race_day':
     st.info("🏁 Race Day Mode: 14 races with AEDT times. Pause after 2 wins.")
 elif st.session_state.mode == 'perpetual':
-    st.info("🌀 Perpetual Mode: Reset stake after win. No pause.")
+    st.info("🌀 Perpetual Mode: Dynamic probability gap thresholds.")
 else:
     st.info("Select a mode to begin.")
     st.stop()
@@ -187,27 +187,34 @@ if st.session_state.mode == 'perpetual':
 else:
     st.info(f"Odds auto-set to: **\${st.session_state.current_odds:.2f}** (from race card)")
 
-# --- IMPLIED PROBABILITY DIFFERENTIAL GUIDE (Perpetual Mode Only) ---
+# --- PERPETUAL PROBABILITY GAP THRESHOLD GUIDE ---
 if st.session_state.mode == 'perpetual':
-    imp_prob_fav = 1 / st.session_state.current_odds
-    imp_prob_40 = imp_prob_fav * (1 - 0.40)
-    imp_prob_45 = imp_prob_fav * (1 - 0.45)
-    imp_prob_50 = imp_prob_fav * (1 - 0.50)
-    odds_40 = round(1 / imp_prob_40, 2) if imp_prob_40 > 0 else 0
-    odds_45 = round(1 / imp_prob_45, 2) if imp_prob_45 > 0 else 0
-    odds_50 = round(1 / imp_prob_50, 2) if imp_prob_50 > 0 else 0
+    p1 = 1 / st.session_state.current_odds
+    thresholds = [0.40, 0.45, 0.50]
+    results = {}
+
+    for t in thresholds:
+        p2_max = p1 - t
+        if p2_max <= 0:
+            results[t] = "Not feasible"
+        else:
+            min_odds_2nd = round(1 / p2_max, 2)
+            results[t] = min_odds_2nd
 
     st.info(f"""
-    🔍 **Implied Probability Differential Guide**  
-    Based on favourite odds: **{st.session_state.current_odds:.2f}** → Implied Prob: **{imp_prob_fav:.1%}**
+    🔍 **Perpetual Probability Gap Thresholds**  
+    Favourite Odds: **\${st.session_state.current_odds:.2f}** → Implied Prob: **{p1:.1%}**
 
-    For a **clear market favourite**, the second favourite should have:
-    - **40% lower probability** → Odds ≥ **{odds_40}**
-    - **45% lower probability** → Odds ≥ **{odds_45}**
-    - **50% lower probability** → Odds ≥ **{odds_50}**
+    For a valid bet, second favourite must have:
+    - **≥ 40% gap** → Odds ≥ **{results[0.40] if results[0.40] != 'Not feasible' else 'N/A'}**
+    - **≥ 45% gap** → Odds ≥ **{results[0.45] if results[0.45] != 'Not feasible' else 'N/A'}**
+    - **≥ 50% gap** → Odds ≥ **{results[0.50] if results[0.50] != 'Not feasible' else 'N/A'}**
 
-    🎯 Stronger signal when second favourite's odds meet or exceed these values.  
-    ✅ Minimum threshold: **40% differential** recommended.
+    ✅ Example:  
+    If favourite is \$1.50 (66.7%), and second favourite is \$4.80 (20.8%),  
+    gap = 66.7% – 20.8% = **45.9%** → **Meets 45% threshold → Bet Y**
+
+    🎯 Only proceed if second favourite's **odds ≥ threshold values above**.
     """, icon="📊")
 
 # --- DATORA EDGE ---
@@ -266,7 +273,6 @@ def log_and_advance(result: str, profit: float):
         "Bankroll": round(st.session_state.bankroll, 2),
         "Timestamp": timestamp
     })
-    # Advance to next race
     st.session_state.current_race_index += 1
     st.session_state.current_odds = 1.80
     st.rerun()
@@ -291,43 +297,3 @@ if col_loss.button("❌ LOSS", use_container_width=True):
 if st.session_state.auto_running:
     time.sleep(2.0 / st.session_state.speed)
     win_prob = 0.60
-    if random.random() < win_prob:
-        st.session_state.bankroll += (recommended_stake * st.session_state.current_odds) - recommended_stake
-        st.session_state.consecutive_wins += 1
-        st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
-        log_and_advance("AUTO WIN", (recommended_stake * st.session_state.current_odds) - recommended_stake)
-    else:
-        st.session_state.bankroll -= recommended_stake
-        st.session_state.consecutive_wins = 0
-        st.session_state.last_bet_amount = recommended_stake
-        log_and_advance("AUTO LOSS", -recommended_stake)
-
-# --- RACE HISTORY ---
-if st.session_state.race_history:
-    st.divider()
-    st.subheader("📋 Race History")
-    history_df = pd.DataFrame(st.session_state.race_history)
-    st.dataframe(history_df, use_container_width=True, hide_index=True)
-
-    # --- PROFIT CHART ---
-    st.subheader("📈 Profit Chart")
-    chart_data = history_df[["Timestamp", "Bankroll"]].set_index("Timestamp")
-    st.line_chart(chart_data["Bankroll"])
-
-# --- EXPLAINER ---
-with st.expander("ℹ️ Logic & Rules"):
-    st.markdown("""
-    ### **Datura Companion v1.6**
-    - **Only bet on favourites** — no underdogs, no overlays
-    - **Expected Win Rates**:
-      - **NRL/AFL Favourites**: 65%
-      - **Horses/Dogs (Start-of-Day Favourite)**: 60%
-    - **Edge = (Expected Win Rate × Odds) - 1**
-    - **Implied Probability Differential**:  
-      Second favourite should be **40%–50% less likely** than favourite → strong market signal
-    - **Staking**: Dynamic, based on loss streak and odds — **no 5% cap**
-    - **Auto Run**: Simulate with speed control
-    - **Profit Chart**: Track bankroll evolution
-
-    **No form analysis. No insider knowledge. Just market structure.**
-    """)
