@@ -99,7 +99,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.4")
+st.title("🐕 Datura Companion v1.5")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -137,7 +137,7 @@ if mode_col3.button("▶️ Auto Run Simulation", use_container_width=True):
 
 # --- DISPLAY MODE STATUS ---
 if st.session_state.mode == 'race_day':
-    st.info("🏁 Race Day Mode: Auto-advances through 14 races. Pause after 2 wins.")
+    st.info("🏁 Race Day Mode: 14 races. Pause after 2 wins.")
 elif st.session_state.mode == 'perpetual':
     st.info("🌀 Perpetual Mode: Reset stake after win. No pause.")
 else:
@@ -165,10 +165,9 @@ if st.session_state.mode == 'race_day':
         st.stop()
     race = race_day_races_with_odds[st.session_state.current_race_index]
     full_race_label = f"{race['track']} • {race['race']} - {race['horse']} (Barrier {race['barrier']})"
-    st.session_state.current_odds = race['odds']  # Auto-set from race data
+    st.session_state.current_odds = race['odds']
 else:
     full_race_label = f"Perpetual Race #{st.session_state.current_race_index + 1}"
-    # In perpetual mode, user inputs odds manually
 
 st.subheader("Current Race")
 st.markdown(f"**{full_race_label}**")
@@ -191,13 +190,9 @@ else:
 # --- IMPLIED PROBABILITY DIFFERENTIAL GUIDE (Perpetual Mode Only) ---
 if st.session_state.mode == 'perpetual':
     imp_prob_fav = 1 / st.session_state.current_odds
-
-    # Target implied probabilities for second favourite
     imp_prob_40 = imp_prob_fav * (1 - 0.40)
     imp_prob_45 = imp_prob_fav * (1 - 0.45)
     imp_prob_50 = imp_prob_fav * (1 - 0.50)
-
-    # Convert to decimal odds
     odds_40 = round(1 / imp_prob_40, 2) if imp_prob_40 > 0 else 0
     odds_45 = round(1 / imp_prob_45, 2) if imp_prob_45 > 0 else 0
     odds_50 = round(1 / imp_prob_50, 2) if imp_prob_50 > 0 else 0
@@ -220,7 +215,7 @@ implied_prob = 1 / st.session_state.current_odds
 datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
 datura_edge_percent = datura_edge_decimal * 100
 
-# --- STAKE LOGIC (NO 5% CAP) ---
+# --- STAKE LOGIC ---
 betting_allowed = True
 if st.session_state.mode == 'race_day' and st.session_state.consecutive_wins >= 2:
     betting_allowed = False
@@ -271,8 +266,11 @@ def log_and_advance(result: str, profit: float):
         "Bankroll": round(st.session_state.bankroll, 2),
         "Timestamp": timestamp
     })
+    # Advance to next race
+    st.session_state.current_race_index += 1
+    st.session_state.current_odds = 1.80
+    st.rerun()
 
-# WIN button
 if col_win.button("✅ WIN", use_container_width=True):
     if not betting_allowed:
         st.warning("Cannot place bet — 2 wins already recorded.")
@@ -282,35 +280,27 @@ if col_win.button("✅ WIN", use_container_width=True):
         st.session_state.consecutive_wins += 1
         st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
         log_and_advance("WIN", profit)
-        st.rerun()
 
-# LOSS button
 if col_loss.button("❌ LOSS", use_container_width=True):
     st.session_state.bankroll -= recommended_stake
     st.session_state.consecutive_wins = 0
     st.session_state.last_bet_amount = recommended_stake
     log_and_advance("LOSS", -recommended_stake)
-    st.rerun()
 
 # --- AUTO RUN LOOP ---
 if st.session_state.auto_running:
     time.sleep(2.0 / st.session_state.speed)
     win_prob = 0.60
     if random.random() < win_prob:
-        if col_win.button("Auto: WIN", key=f"auto_win_{int(time.time())}"):
-            profit = (recommended_stake * st.session_state.current_odds) - recommended_stake
-            st.session_state.bankroll += profit
-            st.session_state.consecutive_wins += 1
-            st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
-            log_and_advance("WIN", profit)
-            st.rerun()
+        st.session_state.bankroll += (recommended_stake * st.session_state.current_odds) - recommended_stake
+        st.session_state.consecutive_wins += 1
+        st.session_state.last_bet_amount = st.session_state.bankroll * base_stake_pct
+        log_and_advance("AUTO WIN", (recommended_stake * st.session_state.current_odds) - recommended_stake)
     else:
-        if col_loss.button("Auto: LOSS", key=f"auto_loss_{int(time.time())}"):
-            st.session_state.bankroll -= recommended_stake
-            st.session_state.consecutive_wins = 0
-            st.session_state.last_bet_amount = recommended_stake
-            log_and_advance("LOSS", -recommended_stake)
-            st.rerun()
+        st.session_state.bankroll -= recommended_stake
+        st.session_state.consecutive_wins = 0
+        st.session_state.last_bet_amount = recommended_stake
+        log_and_advance("AUTO LOSS", -recommended_stake)
 
 # --- RACE HISTORY ---
 if st.session_state.race_history:
@@ -327,7 +317,7 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Companion v1.4**
+    ### **Datura Companion v1.5**
     - **Only bet on favourites** — no underdogs, no overlays
     - **Expected Win Rates**:
       - **NRL/AFL Favourites**: 65%
