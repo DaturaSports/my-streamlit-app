@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import time
+import random
 
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
@@ -23,7 +24,39 @@ if 'theme' not in st.session_state:
 def toggle_theme():
     st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
 
+# Set theme
+if st.session_state.theme == 'dark':
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #0e1117;
+            color: white;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 st.set_page_config(page_title="Datura Companion", layout="wide")
+
+# --- RACE DATA WITH ODDS ---
+race_day_races_with_odds = [
+    {"track": "Morphetville", "race": "Race 2", "horse": "Light The Night", "barrier": "1", "odds": 2.40},
+    {"track": "Rosehill", "race": "Race 1", "horse": "Regal Problem", "barrier": "1", "odds": 2.35},
+    {"track": "Rosehill", "race": "Race 3", "horse": "Incognito", "barrier": "1", "odds": 1.55},
+    {"track": "Rosehill", "race": "Race 4", "horse": "Miss Scandal", "barrier": "1", "odds": 2.40},
+    {"track": "Caulfield", "race": "Race 6", "horse": "Big Sky", "barrier": "1", "odds": 1.65},
+    {"track": "Rosehill", "race": "Race 6", "horse": "Cross Tavern", "barrier": "1", "odds": 1.55},
+    {"track": "Eagle Farm", "race": "Race 5", "horse": "Earn To Burn", "barrier": "1", "odds": 1.95},
+    {"track": "Ascot", "race": "Race 3", "horse": "Daryte", "barrier": "1", "odds": 1.70},
+    {"track": "Morphetville", "race": "Race 10", "horse": "Mic Drop", "barrier": "1", "odds": 2.35},
+    {"track": "Rosehill", "race": "Race 9", "horse": "Willie Oppa", "barrier": "1", "odds": 2.40},
+    {"track": "Caulfield", "race": "Race 10", "horse": "Stealth of the Night", "barrier": "1", "odds": 2.30},
+    {"track": "Eagle Farm", "race": "Race 10", "horse": "True Amor", "barrier": "1", "odds": 1.80},
+    {"track": "Ascot", "race": "Race 7", "horse": "Famous Dain", "barrier": "1", "odds": 2.20},
+    {"track": "Ascot", "race": "Race 9", "horse": "Too Darn Stormy", "barrier": "1", "odds": 2.25}
+]
 
 # --- SIDEBAR SETTINGS ---
 with st.sidebar:
@@ -65,22 +98,8 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# --- TODAY'S RACES ---
-race_day_races = [
-    "Flemington • Race 4 - 14. Yes I Know (2)",
-    "Flemington • Race 5 - 6. Celerity (4)",
-    "Doomben • Race 3 - 14. Stein (6)",
-    "Doomben • Race 5 - 9. Noble Decree (5)",
-    "Rosehill • Race 8 - 5. Band Of Brothers (1)",
-    "Ascot • Race 3 - 6. Our Paladin Al (1)",
-    "Flemington • Race 10 - 8. Sass Appeal (9)",
-    "Gold Coast • Race 8 - 1. Ninja (17)",
-    "Rosehill • Race 10 - 7. Cross Tasman (3)",
-    "Doomben • Race 8 - 7. Ten Deep (1)"
-]
-
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.3")
+st.title("🐕 Datura Companion v1.4")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -118,7 +137,7 @@ if mode_col3.button("▶️ Auto Run Simulation", use_container_width=True):
 
 # --- DISPLAY MODE STATUS ---
 if st.session_state.mode == 'race_day':
-    st.info("🏁 Race Day Mode: Pause after 2 wins until a loss occurs")
+    st.info("🏁 Race Day Mode: Auto-advances through 14 races. Pause after 2 wins.")
 elif st.session_state.mode == 'perpetual':
     st.info("🌀 Perpetual Mode: Reset stake after win. No pause.")
 else:
@@ -140,49 +159,41 @@ if st.session_state.auto_running:
 
 # --- CURRENT RACE ---
 if st.session_state.mode == 'race_day':
-    if st.session_state.current_race_index >= len(race_day_races):
+    if st.session_state.current_race_index >= len(race_day_races_with_odds):
         st.success("🎉 All races completed!")
         st.session_state.auto_running = False
         st.stop()
-    race_str = race_day_races[st.session_state.current_race_index]
+    race = race_day_races_with_odds[st.session_state.current_race_index]
+    full_race_label = f"{race['track']} • {race['race']} - {race['horse']} (Barrier {race['barrier']})"
+    st.session_state.current_odds = race['odds']  # Auto-set from race data
 else:
-    race_str = f"Perpetual Race #{st.session_state.current_race_index + 1}"
-
-try:
-    if st.session_state.mode == 'race_day':
-        track_race_part = race_str.split("-")[0].strip()
-        horse_part = "-".join(race_str.split("-")[1:]).strip()
-        barrier = horse_part.split("(")[-1].strip(")")
-        horse_name = horse_part.split(f"({barrier})")[0].strip()
-        full_race_label = f"{track_race_part} - {horse_name} (Barrier {barrier})"
-    else:
-        full_race_label = race_str
-        barrier = "N/A"
-except Exception:
-    full_race_label = race_str
-    barrier = "Unknown"
+    full_race_label = f"Perpetual Race #{st.session_state.current_race_index + 1}"
+    # In perpetual mode, user inputs odds manually
 
 st.subheader("Current Race")
 st.markdown(f"**{full_race_label}**")
 
 # --- ODDS INPUT ---
-st.subheader("Enter Favourite Odds")
-odds_input = st.number_input(
-    "Favourite Odds",
-    min_value=1.01,
-    value=st.session_state.current_odds,
-    step=0.01,
-    format="%.2f",
-    key="odds_input_live"
-)
-st.session_state.current_odds = odds_input
+st.subheader("Favourite Odds")
+if st.session_state.mode == 'perpetual':
+    odds_input = st.number_input(
+        "Enter Favourite Odds",
+        min_value=1.01,
+        value=st.session_state.current_odds,
+        step=0.01,
+        format="%.2f",
+        key="odds_input_live"
+    )
+    st.session_state.current_odds = odds_input
+else:
+    st.info(f"Odds auto-set to: **\${st.session_state.current_odds:.2f}** (from race card)")
 
 # --- IMPLIED PROBABILITY DIFFERENTIAL GUIDE (Perpetual Mode Only) ---
 if st.session_state.mode == 'perpetual':
     imp_prob_fav = 1 / st.session_state.current_odds
 
     # Target implied probabilities for second favourite
-    imp_prob_40 = imp_prob_fav * (1 - 0.40)  # 40% less likely
+    imp_prob_40 = imp_prob_fav * (1 - 0.40)
     imp_prob_45 = imp_prob_fav * (1 - 0.45)
     imp_prob_50 = imp_prob_fav * (1 - 0.50)
 
@@ -208,7 +219,6 @@ if st.session_state.mode == 'perpetual':
 implied_prob = 1 / st.session_state.current_odds
 datura_edge_decimal = (win_rate_base * st.session_state.current_odds) - 1
 datura_edge_percent = datura_edge_decimal * 100
-implied_prob_percent = implied_prob * 100
 
 # --- STAKE LOGIC (NO 5% CAP) ---
 betting_allowed = True
@@ -241,7 +251,7 @@ else:
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
 
 # --- DISPLAY EDGE ---
-st.markdown(f"**Implied Prob:** {implied_prob_percent:.2f}%")
+st.markdown(f"**Implied Prob:** {implied_prob * 100:.2f}%")
 st.markdown(f"**Expected Win Rate:** {win_rate_base:.2%}")
 edge_color = "green" if datura_edge_decimal > 0 else "red"
 st.markdown(f"### **Datura Edge:** :{edge_color}[{datura_edge_percent:+.2f}%]")
@@ -262,9 +272,7 @@ def log_and_advance(result: str, profit: float):
         "Timestamp": timestamp
     })
 
-    st.session_state.current_race_index += 1
-    st.session_state.current_odds = 1.80
-
+# WIN button
 if col_win.button("✅ WIN", use_container_width=True):
     if not betting_allowed:
         st.warning("Cannot place bet — 2 wins already recorded.")
@@ -276,6 +284,7 @@ if col_win.button("✅ WIN", use_container_width=True):
         log_and_advance("WIN", profit)
         st.rerun()
 
+# LOSS button
 if col_loss.button("❌ LOSS", use_container_width=True):
     st.session_state.bankroll -= recommended_stake
     st.session_state.consecutive_wins = 0
@@ -318,7 +327,7 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Companion v1.3**
+    ### **Datura Companion v1.4**
     - **Only bet on favourites** — no underdogs, no overlays
     - **Expected Win Rates**:
       - **NRL/AFL Favourites**: 65%
