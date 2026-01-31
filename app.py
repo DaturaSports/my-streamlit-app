@@ -40,22 +40,22 @@ if st.session_state.theme == 'dark':
 
 st.set_page_config(page_title="Datura Companion", layout="wide")
 
-# --- RACE DATA WITH ODDS ---
+# --- RACE DATA WITH ODDS AND TIME (AEDT) ---
 race_day_races_with_odds = [
-    {"track": "Morphetville", "race": "Race 2", "horse": "Light The Night", "barrier": "1", "odds": 2.40},
-    {"track": "Rosehill", "race": "Race 1", "horse": "Regal Problem", "barrier": "1", "odds": 2.35},
-    {"track": "Rosehill", "race": "Race 3", "horse": "Incognito", "barrier": "1", "odds": 1.55},
-    {"track": "Rosehill", "race": "Race 4", "horse": "Miss Scandal", "barrier": "1", "odds": 2.40},
-    {"track": "Caulfield", "race": "Race 6", "horse": "Big Sky", "barrier": "1", "odds": 1.65},
-    {"track": "Rosehill", "race": "Race 6", "horse": "Cross Tavern", "barrier": "1", "odds": 1.55},
-    {"track": "Eagle Farm", "race": "Race 5", "horse": "Earn To Burn", "barrier": "1", "odds": 1.95},
-    {"track": "Ascot", "race": "Race 3", "horse": "Daryte", "barrier": "1", "odds": 1.70},
-    {"track": "Morphetville", "race": "Race 10", "horse": "Mic Drop", "barrier": "1", "odds": 2.35},
-    {"track": "Rosehill", "race": "Race 9", "horse": "Willie Oppa", "barrier": "1", "odds": 2.40},
-    {"track": "Caulfield", "race": "Race 10", "horse": "Stealth of the Night", "barrier": "1", "odds": 2.30},
-    {"track": "Eagle Farm", "race": "Race 10", "horse": "True Amor", "barrier": "1", "odds": 1.80},
-    {"track": "Ascot", "race": "Race 7", "horse": "Famous Dain", "barrier": "1", "odds": 2.20},
-    {"track": "Ascot", "race": "Race 9", "horse": "Too Darn Stormy", "barrier": "1", "odds": 2.25}
+    {"track": "Morphetville", "race": "Race 2", "time": "12:29pm (AEDT)", "horse": "Light The Night", "barrier": "1", "odds": 2.40},
+    {"track": "Rosehill", "race": "Race 1", "time": "12:35pm (AEDT)", "horse": "Regal Problem", "barrier": "1", "odds": 2.35},
+    {"track": "Rosehill", "race": "Race 3", "time": "1:45pm (AEDT)", "horse": "Incognito", "barrier": "1", "odds": 1.55},
+    {"track": "Rosehill", "race": "Race 4", "time": "2:20pm (AEDT)", "horse": "Miss Scandal", "barrier": "1", "odds": 2.40},
+    {"track": "Caulfield", "race": "Race 6", "time": "3:10pm (AEDT)", "horse": "Big Sky", "barrier": "1", "odds": 1.65},
+    {"track": "Rosehill", "race": "Race 6", "time": "3:30pm (AEDT)", "horse": "Cross Tavern", "barrier": "1", "odds": 1.55},
+    {"track": "Eagle Farm", "race": "Race 5", "time": "3:38pm (AEDT)", "horse": "Earn To Burn", "barrier": "1", "odds": 1.95},
+    {"track": "Ascot", "race": "Race 3", "time": "4:51pm (AEDT)", "horse": "Daryte", "barrier": "1", "odds": 1.70},
+    {"track": "Morphetville", "race": "Race 10", "time": "5:12pm (AEDT)", "horse": "Mic Drop", "barrier": "1", "odds": 2.35},
+    {"track": "Rosehill", "race": "Race 9", "time": "5:20pm (AEDT)", "horse": "Willie Oppa", "barrier": "1", "odds": 2.40},
+    {"track": "Caulfield", "race": "Race 10", "time": "5:40pm (AEDT)", "horse": "Stealth of the Night", "barrier": "1", "odds": 2.30},
+    {"track": "Eagle Farm", "race": "Race 10", "time": "6:48pm (AEDT)", "horse": "True Amor", "barrier": "1", "odds": 1.80},
+    {"track": "Ascot", "race": "Race 7", "time": "7:17pm (AEDT)", "horse": "Famous Dain", "barrier": "1", "odds": 2.20},
+    {"track": "Ascot", "race": "Race 9", "time": "8:30pm (AEDT)", "horse": "Too Darn Stormy", "barrier": "1", "odds": 2.25}
 ]
 
 # --- SIDEBAR SETTINGS ---
@@ -99,7 +99,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v1.5")
+st.title("🐕 Datura Companion v1.6")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -137,7 +137,7 @@ if mode_col3.button("▶️ Auto Run Simulation", use_container_width=True):
 
 # --- DISPLAY MODE STATUS ---
 if st.session_state.mode == 'race_day':
-    st.info("🏁 Race Day Mode: 14 races. Pause after 2 wins.")
+    st.info("🏁 Race Day Mode: 14 races with AEDT times. Pause after 2 wins.")
 elif st.session_state.mode == 'perpetual':
     st.info("🌀 Perpetual Mode: Reset stake after win. No pause.")
 else:
@@ -164,7 +164,7 @@ if st.session_state.mode == 'race_day':
         st.session_state.auto_running = False
         st.stop()
     race = race_day_races_with_odds[st.session_state.current_race_index]
-    full_race_label = f"{race['track']} • {race['race']} - {race['horse']} (Barrier {race['barrier']})"
+    full_race_label = f"{race['track']} • {race['race']} [{race['time']}] - {race['horse']} (Barrier {race['barrier']})"
     st.session_state.current_odds = race['odds']
 else:
     full_race_label = f"Perpetual Race #{st.session_state.current_race_index + 1}"
@@ -317,7 +317,7 @@ if st.session_state.race_history:
 # --- EXPLAINER ---
 with st.expander("ℹ️ Logic & Rules"):
     st.markdown("""
-    ### **Datura Companion v1.5**
+    ### **Datura Companion v1.6**
     - **Only bet on favourites** — no underdogs, no overlays
     - **Expected Win Rates**:
       - **NRL/AFL Favourites**: 65%
