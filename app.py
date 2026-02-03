@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import random
-import time
 
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
@@ -21,7 +19,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.bet_phase = None
     st.session_state.sunk_fund = 0.0
     st.session_state.sports_selection = None
-    st.session_state.selected_fixture = None
+    st.session_state.t20_current_index = 0
     st.session_state.fixture_list = []
 
 # --- THEME TOGGLE ---
@@ -112,8 +110,6 @@ t20_fixtures = [
 df_fixtures = pd.DataFrame(t20_fixtures)
 df_fixtures['date'] = pd.to_datetime(df_fixtures['date'])
 df_fixtures = df_fixtures.sort_values('date').reset_index(drop=True)
-df_fixtures['display'] = df_fixtures.apply(lambda x: f"{x['date'].strftime('%b %d')} | {x['match']} | {x['stage']} | {x['venue']}", axis=1)
-fixture_options = df_fixtures['display'].tolist()
 
 # --- SIDEBAR SETTINGS ---
 with st.sidebar:
@@ -180,25 +176,11 @@ if col_m2.button("🌀 Perpetual Run", use_container_width=True):
 if col_m3.button("🏏 Sports", use_container_width=True):
     st.session_state.mode = 'sports'
     st.session_state.sports_selection = 't20'
-    st.session_state.fixture_list = fixture_options
+    st.session_state.t20_current_index = 0
     st.session_state.selected_fixture = None
     st.rerun()
 
 st.divider()
-
-# --- AUTO RUN CONTROL ---
-if st.session_state.auto_running:
-    st.warning("▶️ Auto Run Active — Simulating...")
-    col_a, col_b = st.columns([1, 1])
-    if col_a.button("⏸️ Pause Auto Run"):
-        st.session_state.auto_running = False
-        st.rerun()
-    if col_b.button("⏹️ Stop & Reset"):
-        st.session_state.auto_running = False
-        st.session_state.mode = None
-        st.session_state.bet_phase = None
-        st.rerun()
-    st.divider()
 
 # === MODE: START-OF-DAY RUN ===
 if st.session_state.mode == 'race_day':
@@ -221,11 +203,11 @@ if st.session_state.mode == 'race_day':
     st.info(f"Live Odds: **\${st.session_state.current_odds:.2f}**")
 
     # --- PROBABILITY GAPS ---
-    p1 = 1 / opening_odds
+    implied_prob = 1 / opening_odds
     thresholds = [0.35, 0.40, 0.45, 0.50]
     results = {}
     for t in thresholds:
-        p2_max = p1 - t
+        p2_max = implied_prob - t
         results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
 
     st.info(f"""
@@ -298,6 +280,22 @@ elif st.session_state.mode == 'perpetual':
 
     live_odds = st.number_input("Live Odds (For Stake)", min_value=1.01, value=1.80, step=0.01, format="%.2f")
 
+    # --- PROBABILITY GAPS ---
+    implied_prob = 1 / opening_odds
+    thresholds = [0.35, 0.40, 0.45, 0.50]
+    results = {}
+    for t in thresholds:
+        p2_max = implied_prob - t
+        results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
+
+    st.info(f"""
+    🔍 **Odds Gap Targets (Opening: \${opening_odds:.2f})**
+    - ≥35% → ≥ {results[0.35]}
+    - ≥40% → ≥ {results[0.40]}
+    - ≥45% → ≥ {results[0.45]}
+    - ≥50% → ≥ {results[0.50]}
+    """, icon="📊")
+
     # --- STAKE: (Sunk Fund / (Live Odds - 1)) × 1.11 ---
     if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * 0.01
@@ -344,11 +342,13 @@ elif st.session_state.mode == 'perpetual':
 # === MODE: SPORTS (T20) ===
 elif st.session_state.mode == 'sports':
     st.subheader("🏏 T20 World Cup 2026")
-    selected_display = st.selectbox("Select Fixture", options=fixture_options, index=0)
-    st.session_state.selected_fixture = selected_display
 
-    selected_row = df_fixtures[df_fixtures['display'] == selected_display].iloc[0]
-    match_info = f"**{selected_row['match']}** | {selected_row['stage']} | {selected_row['venue']} | {selected_row['date'].strftime('%B %d, %Y')}"
+    if st.session_state.t20_current_index >= len(df_fixtures):
+        st.success("🎉 All fixtures completed!")
+        st.stop()
+
+    current_fixture = df_fixtures.iloc[st.session_state.t20_current_index]
+    match_info = f"**{current_fixture['match']}** | {current_fixture['stage']} | {current_fixture['venue']} | {current_fixture['date'].strftime('%B %d, %Y')}"
     st.markdown(f"### {match_info}")
 
     opening_odds = st.number_input("Opening Odds of Favourite", min_value=1.01, value=1.80, step=0.01, format="%.2f")
@@ -358,7 +358,23 @@ elif st.session_state.mode == 'sports':
 
     live_odds = st.number_input("Live Odds (For Stake)", min_value=1.01, value=opening_odds, step=0.01, format="%.2f")
 
-    # --- STAKE (Same as Start-of-Day) ---
+    # --- PROBABILITY GAPS ---
+    implied_prob = 1 / opening_odds
+    thresholds = [0.35, 0.40, 0.45, 0.50]
+    results = {}
+    for t in thresholds:
+        p2_max = implied_prob - t
+        results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
+
+    st.info(f"""
+    🔍 **Odds Gap Targets (Opening: \${opening_odds:.2f})**
+    - ≥35% → ≥ {results[0.35]}
+    - ≥40% → ≥ {results[0.40]}
+    - ≥45% → ≥ {results[0.45]}
+    - ≥50% → ≥ {results[0.50]}
+    """, icon="📊")
+
+    # --- STAKE LOGIC (Same as Start-of-Day) ---
     if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * 0.01
     elif st.session_state.consecutive_wins > 0:
@@ -380,14 +396,18 @@ elif st.session_state.mode == 'sports':
 
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
 
+    # --- WIN/LOSS ---
     col_win, col_loss = st.columns(2)
+
     def log_sport(result, profit):
         timestamp = datetime.now().strftime("%H:%M:%S")
         st.session_state.race_history.append({
-            "Fixture": selected_row['match'], "Stage": selected_row['stage'],
+            "Fixture": current_fixture['match'], "Stage": current_fixture['stage'],
+            "Opening Odds": opening_odds, "Live Odds": live_odds,
             "Stake": recommended_stake, "Result": result, "Profit": profit,
             "Bankroll": st.session_state.bankroll, "Timestamp": timestamp
         })
+        st.session_state.t20_current_index += 1
         st.rerun()
 
     if col_win.button("✅ WIN", use_container_width=True):
