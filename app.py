@@ -1,3 +1,4 @@
+# datura_companion.py - Datura Companion v3.0 (Updated Start-of-Day Races)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -46,21 +47,16 @@ if st.session_state.theme == 'dark':
 st.set_page_config(page_title="Datura Companion v3.0", layout="wide")
 
 # --- RACE DATA (Start-of-Day & Perpetual) ---
+# Updated with new races for Sat, 7 Feb 2026
 race_day_races_with_odds = [
-    {"track": "Morphetville", "race": "Race 2", "time": "12:29pm (AEDT)", "horse": "Light The Night", "barrier": "1", "odds": 2.40},
-    {"track": "Rosehill", "race": "Race 1", "time": "12:35pm (AEDT)", "horse": "Regal Problem", "barrier": "1", "odds": 2.35},
-    {"track": "Rosehill", "race": "Race 3", "time": "1:45pm (AEDT)", "horse": "Incognito", "barrier": "1", "odds": 1.55},
-    {"track": "Rosehill", "race": "Race 4", "time": "2:20pm (AEDT)", "horse": "Miss Scandal", "barrier": "1", "odds": 2.40},
-    {"track": "Caulfield", "race": "Race 6", "time": "3:10pm (AEDT)", "horse": "Big Sky", "barrier": "1", "odds": 1.65},
-    {"track": "Rosehill", "race": "Race 6", "time": "3:30pm (AEDT)", "horse": "Cross Tavern", "barrier": "1", "odds": 1.55},
-    {"track": "Eagle Farm", "race": "Race 5", "time": "3:38pm (AEDT)", "horse": "Earn To Burn", "barrier": "1", "odds": 1.95},
-    {"track": "Ascot", "race": "Race 3", "time": "4:51pm (AEDT)", "horse": "Daryte", "barrier": "1", "odds": 1.70},
-    {"track": "Morphetville", "race": "Race 10", "time": "5:12pm (AEDT)", "horse": "Mic Drop", "barrier": "1", "odds": 2.35},
-    {"track": "Rosehill", "race": "Race 9", "time": "5:20pm (AEDT)", "horse": "Willie Oppa", "barrier": "1", "odds": 2.40},
-    {"track": "Caulfield", "race": "Race 10", "time": "5:40pm (AEDT)", "horse": "Stealth of the Night", "barrier": "1", "odds": 2.30},
-    {"track": "Eagle Farm", "race": "Race 10", "time": "6:48pm (AEDT)", "horse": "True Amor", "barrier": "1", "odds": 1.80},
-    {"track": "Ascot", "race": "Race 7", "time": "7:17pm (AEDT)", "horse": "Famous Dain", "barrier": "1", "odds": 2.20},
-    {"track": "Ascot", "race": "Race 9", "time": "8:30pm (AEDT)", "horse": "Too Darn Stormy", "barrier": "1", "odds": 2.25}
+    {"track": "Caulfield", "race": "Race 1", "time": "11:15am/12:15pm", "horse": "Ambassadorial (6)", "barrier": "1", "odds": 1.90},
+    {"track": "Randwick", "race": "Race 2", "time": "12:05pm/1:05pm", "horse": "Autumn Break (5)", "barrier": "1", "odds": 1.85},
+    {"track": "Caulfield", "race": "Race 3", "time": "12:20pm/1:20pm", "horse": "Guest House (6)", "barrier": "1", "odds": 2.00},
+    {"track": "Doomben", "race": "Race 2", "time": "12:48pm/1:48pm", "horse": "Dominant Darcy (2)", "barrier": "1", "odds": 1.75},
+    {"track": "Morphettville", "race": "Race 4", "time": "1:07pm/2:07pm", "horse": "World's My Oyster (4)", "barrier": "1", "odds": 1.85},
+    {"track": "Ascot", "race": "Race 2", "time": "3:04pm/4:04pm", "horse": "Boy Crush (7)", "barrier": "1", "odds": 1.70},
+    {"track": "Doomben", "race": "Race 9", "time": "5:10pm/6:10pm", "horse": "Hell (2)", "barrier": "1", "odds": 1.70},
+    {"track": "Ascot", "race": "Race 7", "time": "6:12pm/7:12pm", "horse": "Fancy Red (4)", "barrier": "1", "odds": 1.85}
 ]
 
 # --- T20 WORLD CUP 2026 FIXTURES ---
@@ -115,7 +111,7 @@ df_fixtures = df_fixtures.sort_values('date').reset_index(drop=True)
 with st.sidebar:
     st.header("⚙️ Settings")
     new_bankroll = st.number_input(
-        "Starting Bankroll (\$)",
+        "Starting Bankroll (\\$)",
         min_value=10.0,
         value=st.session_state.initial_bankroll,
         step=10.0
@@ -145,8 +141,8 @@ st.title("🐕 Datura Companion v3.0")
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
 col1, col2, col3 = st.columns(3)
-col1.metric("Bankroll", f"\${st.session_state.bankroll:,.2f}")
-col2.metric("P&L", f"\${pnl:,.2f}", delta=f"{pnl:+,.2f}")
+col1.metric("Bankroll", f"\\${st.session_state.bankroll:,.2f}")
+col2.metric("P&L", f"\\${pnl:,.2f}", delta=f"{pnl:+,.2f}")
 col3.metric("Mode", st.session_state.mode or "None")
 
 st.divider()
@@ -197,10 +193,10 @@ if st.session_state.mode == 'race_day':
     st.session_state.opening_odds = opening_odds
 
     if opening_odds < 1.25:
-        st.error("❌ No Bet – Odds below \$1.25")
+        st.error("❌ No Bet – Odds below \\$1.25")
         st.stop()
 
-    st.info(f"Live Odds: **\${st.session_state.current_odds:.2f}**")
+    st.info(f"Live Odds: **\\${st.session_state.current_odds:.2f}**")
 
     # --- PROBABILITY GAPS ---
     implied_prob = 1 / opening_odds
@@ -211,7 +207,7 @@ if st.session_state.mode == 'race_day':
         results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
 
     st.info(f"""
-    🔍 **Odds Gap Targets (Opening: \${opening_odds:.2f})**
+    🔍 **Odds Gap Targets (Opening: \\${opening_odds:.2f})**
     - ≥35% → ≥ {results[0.35]}
     - ≥40% → ≥ {results[0.40]}
     - ≥45% → ≥ {results[0.45]}
@@ -238,7 +234,7 @@ if st.session_state.mode == 'race_day':
         st.warning("⚠️ Stake exceeds bankroll. Capped.")
         recommended_stake = st.session_state.bankroll
 
-    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
+    st.success(f"**Recommended Stake:** \\${recommended_stake:,.2f}")
 
     # --- WIN/LOSS ---
     col_win, col_loss = st.columns(2)
@@ -275,7 +271,7 @@ elif st.session_state.mode == 'perpetual':
     st.session_state.opening_odds = opening_odds
 
     if opening_odds < 1.25:
-        st.error("❌ No Bet – Odds below \$1.25")
+        st.error("❌ No Bet – Odds below \\$1.25")
         st.stop()
 
     live_odds = st.number_input("Live Odds (For Stake)", min_value=1.01, value=1.80, step=0.01, format="%.2f")
@@ -289,7 +285,7 @@ elif st.session_state.mode == 'perpetual':
         results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
 
     st.info(f"""
-    🔍 **Odds Gap Targets (Opening: \${opening_odds:.2f})**
+    🔍 **Odds Gap Targets (Opening: \\${opening_odds:.2f})**
     - ≥35% → ≥ {results[0.35]}
     - ≥40% → ≥ {results[0.40]}
     - ≥45% → ≥ {results[0.45]}
@@ -311,7 +307,7 @@ elif st.session_state.mode == 'perpetual':
         st.warning("⚠️ Stake exceeds bankroll. Capped.")
         recommended_stake = st.session_state.bankroll
 
-    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
+    st.success(f"**Recommended Stake:** \\${recommended_stake:,.2f}")
 
     # --- WIN/LOSS ---
     col_win, col_loss = st.columns(2)
@@ -353,7 +349,7 @@ elif st.session_state.mode == 'sports':
 
     opening_odds = st.number_input("Opening Odds of Favourite", min_value=1.01, value=1.80, step=0.01, format="%.2f")
     if opening_odds < 1.25:
-        st.error("❌ No Bet – Odds below \$1.25")
+        st.error("❌ No Bet – Odds below \\$1.25")
         st.stop()
 
     live_odds = st.number_input("Live Odds (For Stake)", min_value=1.01, value=opening_odds, step=0.01, format="%.2f")
@@ -367,7 +363,7 @@ elif st.session_state.mode == 'sports':
         results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
 
     st.info(f"""
-    🔍 **Odds Gap Targets (Opening: \${opening_odds:.2f})**
+    🔍 **Odds Gap Targets (Opening: \\${opening_odds:.2f})**
     - ≥35% → ≥ {results[0.35]}
     - ≥40% → ≥ {results[0.40]}
     - ≥45% → ≥ {results[0.45]}
@@ -394,7 +390,7 @@ elif st.session_state.mode == 'sports':
         st.warning("⚠️ Stake exceeds bankroll. Capped.")
         recommended_stake = st.session_state.bankroll
 
-    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
+    st.success(f"**Recommended Stake:** \\${recommended_stake:,.2f}")
 
     # --- WIN/LOSS ---
     col_win, col_loss = st.columns(2)
