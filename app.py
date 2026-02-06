@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v3.0 (Updated Start-of-Day Races)
+# datura_companion.py - Datura Companion v3.0 (Final: Fixed Odds for Start-of-Day)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -13,7 +13,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.80
-    st.session_state.opening_odds = 1.80
     st.session_state.mode = None  # 'race_day', 'perpetual', 'sports'
     st.session_state.auto_running = False
     st.session_state.speed = 1.0
@@ -46,17 +45,16 @@ if st.session_state.theme == 'dark':
 
 st.set_page_config(page_title="Datura Companion v3.0", layout="wide")
 
-# --- RACE DATA (Start-of-Day & Perpetual) ---
-# Updated with new races for Sat, 7 Feb 2026
+# --- RACE DATA (Start-of-Day) - Fixed Odds as Provided ---
 race_day_races_with_odds = [
-    {"track": "Caulfield", "race": "Race 1", "time": "11:15am/12:15pm", "horse": "Ambassadorial (6)", "barrier": "1", "odds": 1.90},
-    {"track": "Randwick", "race": "Race 2", "time": "12:05pm/1:05pm", "horse": "Autumn Break (5)", "barrier": "1", "odds": 1.85},
-    {"track": "Caulfield", "race": "Race 3", "time": "12:20pm/1:20pm", "horse": "Guest House (6)", "barrier": "1", "odds": 2.00},
-    {"track": "Doomben", "race": "Race 2", "time": "12:48pm/1:48pm", "horse": "Dominant Darcy (2)", "barrier": "1", "odds": 1.75},
-    {"track": "Morphettville", "race": "Race 4", "time": "1:07pm/2:07pm", "horse": "World's My Oyster (4)", "barrier": "1", "odds": 1.85},
-    {"track": "Ascot", "race": "Race 2", "time": "3:04pm/4:04pm", "horse": "Boy Crush (7)", "barrier": "1", "odds": 1.70},
-    {"track": "Doomben", "race": "Race 9", "time": "5:10pm/6:10pm", "horse": "Hell (2)", "barrier": "1", "odds": 1.70},
-    {"track": "Ascot", "race": "Race 7", "time": "6:12pm/7:12pm", "horse": "Fancy Red (4)", "barrier": "1", "odds": 1.85}
+    {"track": "Caulfield", "race": "Race 1", "time": "11:15am/1:15pm", "horse": "Ambassadorial (6)", "barrier": "6", "odds": 1.90},
+    {"track": "Randwick", "race": "Race 2", "time": "12:05pm/1:05pm", "horse": "Autumn Break (5)", "barrier": "5", "odds": 1.85},
+    {"track": "Caulfield", "race": "Race 3", "time": "12:20pm/1:20pm", "horse": "Guest House (6)", "barrier": "6", "odds": 2.00},
+    {"track": "Doomben", "race": "Race 2", "time": "12:48pm/1:48pm", "horse": "Dominant Darcy (2)", "barrier": "2", "odds": 1.75},
+    {"track": "Morphettville", "race": "Race 4", "time": "1:07pm/2:07pm", "horse": "World's My Oyster (4)", "barrier": "4", "odds": 1.85},
+    {"track": "Ascot", "race": "Race 2", "time": "3:04pm/4:04pm", "horse": "Boy Crush (7)", "barrier": "7", "odds": 1.70},
+    {"track": "Doomben", "race": "Race 9", "time": "5:10pm/6:10pm", "horse": "Hell (2)", "barrier": "2", "odds": 1.70},
+    {"track": "Ascot", "race": "Race 7", "time": "6:12pm/7:12pm", "horse": "Fancy Red (4)", "barrier": "4", "odds": 1.85}
 ]
 
 # --- T20 WORLD CUP 2026 FIXTURES ---
@@ -183,23 +181,23 @@ if st.session_state.mode == 'race_day':
     if st.session_state.current_race_index >= len(race_day_races_with_odds):
         st.success("🎉 All races completed!")
         st.stop()
+
     race = race_day_races_with_odds[st.session_state.current_race_index]
     full_race_label = f"{race['track']} • {race['race']} [{race['time']}] - {race['horse']} (Barrier {race['barrier']})"
     st.subheader("Current Race")
     st.markdown(f"**{full_race_label}**")
 
+    # Fixed odds — no user input
     st.session_state.current_odds = race['odds']
-    opening_odds = st.number_input("Opening Odds of Favourite", min_value=1.01, value=st.session_state.opening_odds, step=0.01, format="%.2f")
-    st.session_state.opening_odds = opening_odds
 
-    if opening_odds < 1.25:
+    if st.session_state.current_odds < 1.25:
         st.error("❌ No Bet – Odds below \\$1.25")
         st.stop()
 
-    st.info(f"Live Odds: **\\${st.session_state.current_odds:.2f}**")
+    st.info(f"**Fixed Odds: \\${st.session_state.current_odds:.2f}**", icon="🎯")
 
-    # --- PROBABILITY GAPS ---
-    implied_prob = 1 / opening_odds
+    # --- PROBABILITY GAPS using fixed odds as opening ===
+    implied_prob = 1 / st.session_state.current_odds
     thresholds = [0.35, 0.40, 0.45, 0.50]
     results = {}
     for t in thresholds:
@@ -207,7 +205,7 @@ if st.session_state.mode == 'race_day':
         results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
 
     st.info(f"""
-    🔍 **Odds Gap Targets (Opening: \\${opening_odds:.2f})**
+    🔍 **Odds Gap Targets (Fixed: \\${st.session_state.current_odds:.2f})**
     - ≥35% → ≥ {results[0.35]}
     - ≥40% → ≥ {results[0.40]}
     - ≥45% → ≥ {results[0.45]}
@@ -252,14 +250,14 @@ if st.session_state.mode == 'race_day':
         st.session_state.bankroll += profit
         st.session_state.consecutive_wins += 1
         st.session_state.last_bet_amount = st.session_state.bankroll * 0.01
-        st.session_state.last_bet_odds = opening_odds
+        st.session_state.last_bet_odds = st.session_state.current_odds
         log_race("WIN", round(profit, 2))
 
     if col_loss.button("❌ LOSS", use_container_width=True):
         st.session_state.bankroll -= recommended_stake
         st.session_state.consecutive_wins = 0
         st.session_state.last_bet_amount = recommended_stake
-        st.session_state.last_bet_odds = opening_odds
+        st.session_state.last_bet_odds = st.session_state.current_odds
         log_race("LOSS", -recommended_stake)
 
 # === MODE: PERPETUAL RUN ===
@@ -394,7 +392,6 @@ elif st.session_state.mode == 'sports':
 
     # --- WIN/LOSS ---
     col_win, col_loss = st.columns(2)
-
     def log_sport(result, profit):
         timestamp = datetime.now().strftime("%H:%M:%S")
         st.session_state.race_history.append({
