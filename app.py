@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v4.2 (Final: No Syntax Errors, Fully Functional)
+# datura_companion.py - Datura Companion v4.3 (Fully Working, No Errors)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -35,7 +35,7 @@ if st.session_state.theme == 'dark':
         </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Datura Companion v4.2", layout="wide")
+st.set_page_config(page_title="Datura Companion v4.3", layout="wide")
 
 # --- RACE DATA (Start-of-Day) - 14 Feb 2026 ---
 race_day_races_with_odds = [
@@ -126,7 +126,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v4.2")
+st.title("🐕 Datura Companion v4.3")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -137,7 +137,7 @@ col3.metric("Mode", st.session_state.mode or "None")
 
 st.divider()
 
-# --- MODE NAVIGATION ---
+# --- MODE SELECTION ---
 st.subheader("🎯 Select Mode")
 col_m1, col_m2, col_m3 = st.columns(3)
 
@@ -187,10 +187,13 @@ if st.session_state.mode == 'race_day':
 
     st.info(f"**Fixed Odds: \${st.session_state.current_odds:.2f}**", icon="🎯")
 
-    # Odds Gap Targets
     implied_prob = 1 / st.session_state.current_odds
     thresholds = [0.35, 0.40, 0.45, 0.50]
-    results = {t: round(1 / (implied_prob - t), 2) if (implied_prob - t) > 0 else "N/A" for t in thresholds}
+    results = {}
+    for t in thresholds:
+        p2_max = implied_prob - t
+        results[t] = round(1 / p2_max, 2) if p2_max > 0 else "N/A"
+
     st.info(f"""
     🔍 **Odds Gap Targets (Opening: \${st.session_state.current_odds:.2f})**
     - ≥35% → ≥ {results[0.35]}
@@ -199,7 +202,6 @@ if st.session_state.mode == 'race_day':
     - ≥50% → ≥ {results[0.50]}
     """, icon="📊")
 
-    # Stake Logic
     if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * 0.01
     elif st.session_state.consecutive_wins > 0:
@@ -221,11 +223,10 @@ if st.session_state.mode == 'race_day':
 
     st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
 
-    # Win/Loss Buttons
     col_win, col_loss = st.columns(2)
 
     def log_race(result, profit):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state.race_history.append({
             "Race": full_race_label,
-            "
+            "Phase": "Start-of
