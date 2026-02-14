@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v4.3 (Fully Working, No Errors)
+# datura_companion.py - Datura Companion v5.0 (Final, Error-Free)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -8,6 +8,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
     st.session_state.consecutive_wins = 0
+    st.session_state.consecutive_losses = 0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
     st.session_state.race_history = []
@@ -21,6 +22,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.t20_current_index = 0
     st.session_state.opening_odds = 1.80
     st.session_state.theme = 'light'
+    st.session_state.bet_active = True  # Controls betting after 2 wins
 
 # --- THEME TOGGLE ---
 def toggle_theme():
@@ -32,10 +34,11 @@ if st.session_state.theme == 'dark':
         <style>
         .stApp { background-color: #0e1117; color: white; }
         .stButton>button { background-color: #262730; color: white; border: 1px solid #444; }
+        .stTextInput>div>div>input { color: white; background-color: #262730; }
         </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Datura Companion v4.3", layout="wide")
+st.set_page_config(page_title="Datura Companion v5.0", layout="wide")
 
 # --- RACE DATA (Start-of-Day) - 14 Feb 2026 ---
 race_day_races_with_odds = [
@@ -126,7 +129,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v4.3")
+st.title("🐕 Datura Companion v5.0")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -145,19 +148,22 @@ if col_m1.button("🏁 Start-of-Day Favourites", use_container_width=True):
     st.session_state.mode = 'race_day'
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
+    st.session_state.consecutive_losses = 0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
     st.session_state.sunk_fund = 0.0
+    st.session_state.bet_active = True
     st.rerun()
 
 if col_m2.button("🌀 Perpetual Run", use_container_width=True):
     st.session_state.mode = 'perpetual'
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
+    st.session_state.consecutive_losses = 0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
     st.session_state.sunk_fund = 0.0
-    st.session_state.opening_odds = 1.80
+    st.session_state.bet_active = True
     st.rerun()
 
 if col_m3.button("🏏 Sports (T20 WC 2026)", use_container_width=True):
@@ -165,6 +171,7 @@ if col_m3.button("🏏 Sports (T20 WC 2026)", use_container_width=True):
     st.session_state.t20_current_index = 0
     st.session_state.selected_fixture = None
     st.session_state.opening_odds = 1.80
+    st.session_state.bet_active = True
     st.rerun()
 
 st.divider()
@@ -181,12 +188,15 @@ if st.session_state.mode == 'race_day':
     st.markdown(f"**{full_race_label}**")
 
     st.session_state.current_odds = race['odds']
-    if st.session_state.current_odds < 1.25:
-        st.error("❌ No Bet – Odds below \$1.25")
+
+    # No Bet if odds ≤ 1.25
+    if st.session_state.current_odds <= 1.25:
+        st.error("❌ No Bet – Odds too low (≤ 1.25)")
         st.stop()
 
     st.info(f"**Fixed Odds: \${st.session_state.current_odds:.2f}**", icon="🎯")
 
+    # Odds Gap Targets
     implied_prob = 1 / st.session_state.current_odds
     thresholds = [0.35, 0.40, 0.45, 0.50]
     results = {}
@@ -202,31 +212,21 @@ if st.session_state.mode == 'race_day':
     - ≥50% → ≥ {results[0.50]}
     """, icon="📊")
 
-    if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
-        recommended_stake = st.session_state.bankroll * 0.01
-    elif st.session_state.consecutive_wins > 0:
-        recommended_stake = st.session_state.bankroll * 0.01
+    # Check if betting is paused due to 2 wins
+    if st.session_state.consecutive_wins >= 2:
+        st.warning("⏸️ Paused: 2 consecutive wins. Waiting for loss to resume.")
+        st.session_state.bet_active = False
     else:
-        last_odds = st.session_state.last_bet_odds
-        if last_odds > 2.00:
-            recommended_stake = st.session_state.last_bet_amount * 2
-        elif 1.50 < last_odds <= 2.00:
-            recommended_stake = st.session_state.last_bet_amount * 3
-        elif 1.25 <= last_odds <= 1.50:
-            recommended_stake = st.session_state.last_bet_amount * 5
-        else:
+        st.session_state.bet_active = True
+
+    # Calculate stake
+    if st.session_state.bet_active:
+        if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
             recommended_stake = st.session_state.bankroll * 0.01
-
-    if recommended_stake > st.session_state.bankroll:
-        st.warning("⚠️ Stake exceeds bankroll. Capped.")
-        recommended_stake = st.session_state.bankroll
-
-    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
-
-    col_win, col_loss = st.columns(2)
-
-    def log_race(result, profit):
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.session_state.race_history.append({
-            "Race": full_race_label,
-            "Phase": "Start-of
+        elif st.session_state.consecutive_wins > 0:
+            recommended_stake = st.session_state.bankroll * 0.01
+        else:
+            last_odds = st.session_state.last_bet_odds
+            if last_odds > 2.00:
+                recommended_stake = st.session_state.last_bet_amount * 2
+            elif
