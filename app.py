@@ -1,8 +1,7 @@
-# datura_companion.py - Datura Companion v3.1 Full Restore
+# datura_companion.py - Datura Companion v3.2 (Full Verified - 14 Feb 2026)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import time
 
 # --- SESSION STATE INIT ---
 if 'bankroll' not in st.session_state:
@@ -15,7 +14,7 @@ if 'bankroll' not in st.session_state:
     st.session_state.race_history = []
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.80
-    st.session_state.mode = None  # 'race_day', 'perpetual', 'sports'
+    st.session_state.mode = None
     st.session_state.bet_phase = None
     st.session_state.sunk_fund = 0.0
     st.session_state.auto_running = False
@@ -38,82 +37,23 @@ if st.session_state.theme == 'dark':
             background-color: #0e1117;
             color: white;
         }
-        .stButton>button {
-            color: #0e1117;
-        }
         </style>
         """,
         unsafe_allow_html=True
     )
 
-st.set_page_config(page_title="Datura Companion v3.1", layout="wide")
+st.set_page_config(page_title="Datura Companion v3.2", layout="wide")
 
 # --- RACE DATA (Start-of-Day) - 8 Favourites for Sat, 14 Feb 2026 ---
 race_day_races_with_odds = [
-    {
-        "track": "Eagle Farm",
-        "race": "Race 2",
-        "time": "12:03",
-        "horse": "Larado (4)",
-        "barrier": "4",
-        "odds": 1.75
-    },
-    {
-        "track": "Flemington",
-        "race": "Race 4",
-        "time": "12:45",
-        "horse": "Immortal Star (1)",
-        "barrier": "1",
-        "odds": 2.25
-    },
-    {
-        "track": "Morphettville",
-        "race": "Race 3",
-        "time": "12:57",
-        "horse": "Bassett Babe (5)",
-        "barrier": "5",
-        "odds": 1.40
-    },
-    {
-        "track": "Randwick",
-        "race": "Race 4",
-        "time": "13:05",
-        "horse": "Sovereign Hill (7)",
-        "barrier": "7",
-        "odds": 2.05
-    },
-    {
-        "track": "Randwick",
-        "race": "Race 5",
-        "time": "13:40",
-        "horse": "Cross Tasman (10)",
-        "barrier": "10",
-        "odds": 1.90
-    },
-    {
-        "track": "Flemington",
-        "race": "Race 6",
-        "time": "13:55",
-        "horse": "Saint George (6)",
-        "barrier": "6",
-        "odds": 2.50
-    },
-    {
-        "track": "Randwick",
-        "race": "Race 8",
-        "time": "15:30",
-        "horse": "Autumn Glow (9)",
-        "barrier": "9",
-        "odds": 1.60
-    },
-    {
-        "track": "Flemington",
-        "race": "Race 9",
-        "time": "15:50",
-        "horse": "Sixties (10)",
-        "barrier": "10",
-        "odds": 1.80
-    }
+    {"track": "Eagle Farm", "race": "Race 2", "time": "12:03", "horse": "Larado (4)", "barrier": "4", "odds": 1.75},
+    {"track": "Flemington", "race": "Race 4", "time": "12:45", "horse": "Immortal Star (1)", "barrier": "1", "odds": 2.25},
+    {"track": "Morphettville", "race": "Race 3", "time": "12:57", "horse": "Bassett Babe (5)", "barrier": "5", "odds": 1.40},
+    {"track": "Randwick", "race": "Race 4", "time": "13:05", "horse": "Sovereign Hill (7)", "barrier": "7", "odds": 2.05},
+    {"track": "Randwick", "race": "Race 5", "time": "13:40", "horse": "Cross Tasman (10)", "barrier": "10", "odds": 1.90},
+    {"track": "Flemington", "race": "Race 6", "time": "13:55", "horse": "Saint George (6)", "barrier": "6", "odds": 2.50},
+    {"track": "Randwick", "race": "Race 8", "time": "15:30", "horse": "Autumn Glow (9)", "barrier": "9", "odds": 1.60},
+    {"track": "Flemington", "race": "Race 9", "time": "15:50", "horse": "Sixties (10)", "barrier": "10", "odds": 1.80}
 ]
 
 # --- T20 WORLD CUP 2026 FIXTURES ---
@@ -193,7 +133,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v3.1")
+st.title("🐕 Datura Companion v3.2")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -228,6 +168,7 @@ if col_m2.button("🌀 Perpetual Run", use_container_width=True):
     st.session_state.consecutive_losses = 0
     st.session_state.sunk_fund = 0.0
     st.session_state.last_bet_amount = 0.0
+    st.session_state.last_bet_odds = 1.80
     st.session_state.race_history = []
     st.rerun()
 
@@ -263,24 +204,29 @@ if st.session_state.mode == 'race_day':
 
     st.info(f"**Start-of-Day Odds: \${st.session_state.current_odds:.2f}**", icon="🎯")
 
-    # Auto-stop after 2 wins in a row
+    # Auto-pause after 2 wins
     if st.session_state.consecutive_wins >= 2:
-        st.warning("⚠️ 2 wins in a row — pausing bets until next loss. Click 'Win' or 'Loss' to resume.")
-    elif st.session_state.consecutive_losses >= 2:
-        st.warning("⚠️ 2 losses in a row — you may choose to pause and restart.")
-
-       # --- STAKE CALCULATION ---
-    if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
-        recommended_stake = st.session_state.bankroll * 0.01
-    elif st.session_state.consecutive_wins > 0:
-        recommended_stake = st.session_state.bankroll * 0.01
-    else:
-        last_odds = st.session_state.last_bet_odds
-        if last_odds > 2.00:
-            recommended_stake = st.session_state.last_bet_amount * 2
-        elif 1.50 < last_odds <= 2.00:
-            recommended_stake = st.session_state.last_bet_amount * 3
-        elif 1.25 <= last_odds <= 1.50:
-            recommended_stake = st.session_state.last_bet_amount * 5
-        else:
-            recommended_stake = st.session_state.bankroll * 0.01  # fallback
+        st.warning("⚠️ Auto-pause: 2 wins in a row. Resume with next loss.")
+        if st.button("🟢 Win (Confirm)"):
+            st.session_state.consecutive_wins += 1
+            st.session_state.consecutive_losses = 0
+            st.session_state.race_history.append({
+                "race": full_race_label,
+                "odds": st.session_state.current_odds,
+                "stake": st.session_state.last_bet_amount,
+                "result": "Win",
+                "timestamp": datetime.now().isoformat()
+            })
+            st.session_state.current_race_index += 1
+            st.rerun()
+        if st.button("🔴 Loss (Override)"):
+            st.session_state.consecutive_wins = 0
+            st.session_state.consecutive_losses = 1
+            st.session_state.race_history.append({
+                "race": full_race_label,
+                "odds": st.session_state.current_odds,
+                "stake": st.session_state.last_bet_amount,
+                "result": "Loss",
+                "timestamp": datetime.now().isoformat()
+            })
+            st.session_state.current
