@@ -269,7 +269,7 @@ if st.session_state.mode == 'race_day':
     elif st.session_state.consecutive_losses >= 2:
         st.warning("⚠️ 2 losses in a row — you may choose to pause and restart.")
 
-    # --- STAKE CALCULATION ---
+       # --- STAKE CALCULATION ---
     if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
         recommended_stake = st.session_state.bankroll * 0.01
     elif st.session_state.consecutive_wins > 0:
@@ -280,4 +280,7 @@ if st.session_state.mode == 'race_day':
             recommended_stake = st.session_state.last_bet_amount * 2
         elif 1.50 < last_odds <= 2.00:
             recommended_stake = st.session_state.last_bet_amount * 3
-        elif 1.25 <= last_odds <=
+        elif 1.25 <= last_odds <= 1.50:
+            recommended_stake = st.session_state.last_bet_amount * 5
+        else:
+            recommended_stake = st.session_state.bankroll * 0.01  # fallback
