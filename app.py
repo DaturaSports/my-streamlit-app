@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v3.2 (Full Verified - 14 Feb 2026)
+# datura_companion.py - Datura Companion v4.0 (Final Verified - 14 Feb 2026)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -8,20 +8,20 @@ if 'bankroll' not in st.session_state:
     st.session_state.bankroll = 1000.0
     st.session_state.initial_bankroll = 1000.0
     st.session_state.consecutive_wins = 0
-    st.session_state.consecutive_losses = 0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
     st.session_state.race_history = []
     st.session_state.current_race_index = 0
     st.session_state.current_odds = 1.80
     st.session_state.mode = None
-    st.session_state.bet_phase = None
-    st.session_state.sunk_fund = 0.0
     st.session_state.auto_running = False
     st.session_state.speed = 1.0
+    st.session_state.bet_phase = None
+    st.session_state.sunk_fund = 0.0
     st.session_state.sports_selection = None
     st.session_state.t20_current_index = 0
-    st.session_state.selected_fixture = None
+    st.session_state.opening_odds = 1.80
+    st.session_state.fixture_list = []
     st.session_state.theme = 'light'
 
 # --- THEME TOGGLE ---
@@ -30,21 +30,16 @@ def toggle_theme():
 
 # Set theme
 if st.session_state.theme == 'dark':
-    st.markdown(
-        """
+    st.markdown("""
         <style>
-        .stApp {
-            background-color: #0e1117;
-            color: white;
-        }
+        .stApp { background-color: #0e1117; color: white; }
+        .stButton>button { background-color: #262730; color: white; border: 1px solid #444; }
         </style>
-        """,
-        unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Datura Companion v3.2", layout="wide")
+st.set_page_config(page_title="Datura Companion v4.0", layout="wide")
 
-# --- RACE DATA (Start-of-Day) - 8 Favourites for Sat, 14 Feb 2026 ---
+# --- RACE DATA (Start-of-Day) - Updated for 14 Feb 2026 ---
 race_day_races_with_odds = [
     {"track": "Eagle Farm", "race": "Race 2", "time": "12:03", "horse": "Larado (4)", "barrier": "4", "odds": 1.75},
     {"track": "Flemington", "race": "Race 4", "time": "12:45", "horse": "Immortal Star (1)", "barrier": "1", "odds": 2.25},
@@ -56,7 +51,7 @@ race_day_races_with_odds = [
     {"track": "Flemington", "race": "Race 9", "time": "15:50", "horse": "Sixties (10)", "barrier": "10", "odds": 1.80}
 ]
 
-# --- T20 WORLD CUP 2026 FIXTURES ---
+# --- T20 WORLD CUP 2026 FIXTURES (Most Recent) ---
 t20_fixtures = [
     {"date": "2026-02-07", "match": "Pakistan vs Netherlands", "stage": "Group Stage", "venue": "Mumbai"},
     {"date": "2026-02-07", "match": "India vs USA", "stage": "Group Stage", "venue": "Mumbai"},
@@ -97,7 +92,7 @@ t20_fixtures = [
     {"date": "2026-02-26", "match": "Super 8 Match 12", "stage": "Super 8", "venue": "Colombo"},
     {"date": "2026-03-04", "match": "Semi-Final 1", "stage": "Semi-Final", "venue": "Mumbai"},
     {"date": "2026-03-05", "match": "Semi-Final 2", "stage": "Semi-Final", "venue": "Kolkata"},
-    {"date": "2026-03-08", "match": "Final", "stage": "Final", "venue": "Chennai"},
+    {"date": "2026-03-08", "match": "Final", "stage": "Final", "venue": "Chennai"}
 ]
 
 df_fixtures = pd.DataFrame(t20_fixtures)
@@ -133,7 +128,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v3.2")
+st.title("🐕 Datura Companion v4.0")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -146,38 +141,32 @@ st.divider()
 
 # --- MODE NAVIGATION ---
 st.subheader("🎯 Select Mode")
-
 col_m1, col_m2, col_m3 = st.columns(3)
+
 if col_m1.button("🏁 Start-of-Day Favourites", use_container_width=True):
     st.session_state.mode = 'race_day'
-    st.session_state.bet_phase = 'start_day'
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
-    st.session_state.consecutive_losses = 0
-    st.session_state.sunk_fund = 0.0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
-    st.session_state.race_history = []
+    st.session_state.sunk_fund = 0.0
     st.rerun()
 
 if col_m2.button("🌀 Perpetual Run", use_container_width=True):
     st.session_state.mode = 'perpetual'
-    st.session_state.bet_phase = 'perpetual'
     st.session_state.current_race_index = 0
     st.session_state.consecutive_wins = 0
-    st.session_state.consecutive_losses = 0
-    st.session_state.sunk_fund = 0.0
     st.session_state.last_bet_amount = 0.0
     st.session_state.last_bet_odds = 1.80
-    st.session_state.race_history = []
+    st.session_state.sunk_fund = 0.0
+    st.session_state.opening_odds = 1.80
     st.rerun()
 
 if col_m3.button("🏏 Sports (T20 WC 2026)", use_container_width=True):
     st.session_state.mode = 'sports'
-    st.session_state.sports_selection = 't20'
     st.session_state.t20_current_index = 0
     st.session_state.selected_fixture = None
-    st.session_state.race_history = []
+    st.session_state.opening_odds = 1.80
     st.rerun()
 
 st.divider()
@@ -194,39 +183,47 @@ if st.session_state.mode == 'race_day':
     st.markdown(f"**{full_race_label}**")
 
     st.session_state.current_odds = race['odds']
-
     if st.session_state.current_odds < 1.25:
         st.error("❌ No Bet – Odds below \$1.25")
-        if st.button("⏭️ Skip to Next Race"):
-            st.session_state.current_race_index += 1
-            st.rerun()
         st.stop()
 
-    st.info(f"**Start-of-Day Odds: \${st.session_state.current_odds:.2f}**", icon="🎯")
+    st.info(f"**Fixed Odds: \${st.session_state.current_odds:.2f}**", icon="🎯")
 
-    # Auto-pause after 2 wins
-    if st.session_state.consecutive_wins >= 2:
-        st.warning("⚠️ Auto-pause: 2 wins in a row. Resume with next loss.")
-        if st.button("🟢 Win (Confirm)"):
-            st.session_state.consecutive_wins += 1
-            st.session_state.consecutive_losses = 0
-            st.session_state.race_history.append({
-                "race": full_race_label,
-                "odds": st.session_state.current_odds,
-                "stake": st.session_state.last_bet_amount,
-                "result": "Win",
-                "timestamp": datetime.now().isoformat()
-            })
-            st.session_state.current_race_index += 1
-            st.rerun()
-        if st.button("🔴 Loss (Override)"):
-            st.session_state.consecutive_wins = 0
-            st.session_state.consecutive_losses = 1
-            st.session_state.race_history.append({
-                "race": full_race_label,
-                "odds": st.session_state.current_odds,
-                "stake": st.session_state.last_bet_amount,
-                "result": "Loss",
-                "timestamp": datetime.now().isoformat()
-            })
-            st.session_state.current
+    # Odds Gap Targets
+    implied_prob = 1 / st.session_state.current_odds
+    thresholds = [0.35, 0.40, 0.45, 0.50]
+    results = {t: round(1 / (implied_prob - t), 2) if (implied_prob - t) > 0 else "N/A" for t in thresholds}
+    st.info(f"""
+    🔍 **Odds Gap Targets (Opening: \${st.session_state.current_odds:.2f})**
+    - ≥35% → ≥ {results[0.35]}
+    - ≥40% → ≥ {results[0.40]}
+    - ≥45% → ≥ {results[0.45]}
+    - ≥50% → ≥ {results[0.50]}
+    """, icon="📊")
+
+    # Stake Logic
+    if st.session_state.consecutive_wins == 0 and st.session_state.last_bet_amount == 0:
+        recommended_stake = st.session_state.bankroll * 0.01
+    elif st.session_state.consecutive_wins > 0:
+        recommended_stake = st.session_state.bankroll * 0.01
+    else:
+        last_odds = st.session_state.last_bet_odds
+        if last_odds > 2.00:
+            recommended_stake = st.session_state.last_bet_amount * 2
+        elif 1.50 < last_odds <= 2.00:
+            recommended_stake = st.session_state.last_bet_amount * 3
+        elif 1.25 <= last_odds <= 1.50:
+            recommended_stake = st.session_state.last_bet_amount * 5
+        else:
+            recommended_stake = st.session_state.bankroll * 0.01
+
+    if recommended_stake > st.session_state.bankroll:
+        st.warning("⚠️ Stake exceeds bankroll. Capped.")
+        recommended_stake = st.session_state.bankroll
+
+    st.success(f"**Recommended Stake:** \${recommended_stake:,.2f}")
+
+    # Win/Loss Buttons
+    col_win, col_loss = st.columns(2)
+    def log_race(result, profit):
+        timestamp =
