@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v4.1 (Final: No Truncation, Fully Functional)
+# datura_companion.py - Datura Companion v4.2 (Final: No Syntax Errors, Fully Functional)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -16,7 +16,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.mode = None
     st.session_state.auto_running = False
     st.session_state.speed = 1.0
-    st.session_state.bet_phase = None
     st.session_state.sunk_fund = 0.0
     st.session_state.sports_selection = None
     st.session_state.t20_current_index = 0
@@ -36,9 +35,9 @@ if st.session_state.theme == 'dark':
         </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Datura Companion v4.1", layout="wide")
+st.set_page_config(page_title="Datura Companion v4.2", layout="wide")
 
-# --- RACE DATA (Start-of-Day) - Updated for 14 Feb 2026 ---
+# --- RACE DATA (Start-of-Day) - 14 Feb 2026 ---
 race_day_races_with_odds = [
     {"track": "Eagle Farm", "race": "Race 2", "time": "12:03", "horse": "Larado (4)", "barrier": "4", "odds": 1.75},
     {"track": "Flemington", "race": "Race 4", "time": "12:45", "horse": "Immortal Star (1)", "barrier": "1", "odds": 2.25},
@@ -127,7 +126,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v4.1")
+st.title("🐕 Datura Companion v4.2")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -229,9 +228,4 @@ if st.session_state.mode == 'race_day':
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         st.session_state.race_history.append({
             "Race": full_race_label,
-            "Phase": "Start-of-Day",
-            "Stake": recommended_stake,
-            "Odds": st.session_state.current_odds,
-            "Result": result,
-            "Profit": round(profit, 2),
-            "Bankroll": st.session_state.bank
+            "
