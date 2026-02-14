@@ -229,4 +229,4 @@ if st.session_state.mode == 'race_day':
             last_odds = st.session_state.last_bet_odds
             if last_odds > 2.00:
                 recommended_stake = st.session_state.last_bet_amount * 2
-            elif
+            elif:
