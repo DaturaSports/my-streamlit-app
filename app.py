@@ -1,4 +1,4 @@
-# datura_companion.py - Datura Companion v4.0 (Final Verified - 14 Feb 2026)
+# datura_companion.py - Datura Companion v4.1 (Final: No Truncation, Fully Functional)
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -21,7 +21,6 @@ if 'bankroll' not in st.session_state:
     st.session_state.sports_selection = None
     st.session_state.t20_current_index = 0
     st.session_state.opening_odds = 1.80
-    st.session_state.fixture_list = []
     st.session_state.theme = 'light'
 
 # --- THEME TOGGLE ---
@@ -37,7 +36,7 @@ if st.session_state.theme == 'dark':
         </style>
     """, unsafe_allow_html=True)
 
-st.set_page_config(page_title="Datura Companion v4.0", layout="wide")
+st.set_page_config(page_title="Datura Companion v4.1", layout="wide")
 
 # --- RACE DATA (Start-of-Day) - Updated for 14 Feb 2026 ---
 race_day_races_with_odds = [
@@ -51,7 +50,7 @@ race_day_races_with_odds = [
     {"track": "Flemington", "race": "Race 9", "time": "15:50", "horse": "Sixties (10)", "barrier": "10", "odds": 1.80}
 ]
 
-# --- T20 WORLD CUP 2026 FIXTURES (Most Recent) ---
+# --- T20 WORLD CUP 2026 FIXTURES ---
 t20_fixtures = [
     {"date": "2026-02-07", "match": "Pakistan vs Netherlands", "stage": "Group Stage", "venue": "Mumbai"},
     {"date": "2026-02-07", "match": "India vs USA", "stage": "Group Stage", "venue": "Mumbai"},
@@ -128,7 +127,7 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN INTERFACE ---
-st.title("🐕 Datura Companion v4.0")
+st.title("🐕 Datura Companion v4.1")
 
 # Metrics
 pnl = st.session_state.bankroll - st.session_state.initial_bankroll
@@ -225,5 +224,14 @@ if st.session_state.mode == 'race_day':
 
     # Win/Loss Buttons
     col_win, col_loss = st.columns(2)
+
     def log_race(result, profit):
-        timestamp =
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.race_history.append({
+            "Race": full_race_label,
+            "Phase": "Start-of-Day",
+            "Stake": recommended_stake,
+            "Odds": st.session_state.current_odds,
+            "Result": result,
+            "Profit": round(profit, 2),
+            "Bankroll": st.session_state.bank
